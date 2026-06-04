@@ -62,12 +62,36 @@ async def health() -> JSONResponse:
     s = get_settings()
     catalog = doctors.list_doctors()
     ready_doctors = [d.key for d in catalog if d.exists]
+    backend_mode = (s.video_backend or "local").lower()
+    # 各 backend 的就绪判定（前端可据此精准提示缺哪一项）
+    kling_ready = bool(s.kling_access_key and s.kling_secret_key)
+    kling_public_base = s.kling_public_base_url or s.public_base_url or ""
+    backend_ready = {
+        "local": True,
+        "motion": s.credentials_ready,
+        "aigc": s.credentials_ready,
+        "kling": kling_ready and bool(kling_public_base),
+    }.get(backend_mode, False)
+    # 当前 backend 实际"生效模型"标识，避免和静态 aigc_model_name 混淆
+    backend_model = {
+        "local": "local/ffmpeg",
+        "motion": f"{s.motion_model_name}/{s.motion_model_version}/motion_control",
+        "aigc": f"{s.aigc_model_name}/{s.aigc_model_version}/{s.aigc_scene_type}",
+        "kling": f"Kling/{s.kling_image_model}/advanced-lip-sync",
+    }.get(backend_mode, backend_mode)
     return JSONResponse(
         {
             "ok": True,
             "credentials_ready": s.credentials_ready,
             "sub_app_id": s.vod_sub_app_id,
+            # 兼容老前端的静态字段（基于 aigc_* 配置拼接，仅展示用）
             "model": f"{s.aigc_model_name}/{s.aigc_model_version}/{s.aigc_scene_type}",
+            # —— 真实生效的视频后端 —— #
+            "video_backend": backend_mode,
+            "backend_model": backend_model,
+            "backend_ready": backend_ready,
+            "kling_ready": kling_ready,
+            "kling_public_base_url": kling_public_base,
             # 形象库就绪即可生成（首帧来自本地素材库），兼容旧的 fileid/url 配置
             "doctor_image_ready": bool(
                 ready_doctors or s.doctor_image_fileid or s.doctor_image_url

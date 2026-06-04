@@ -152,6 +152,45 @@ async def get_job_file(job_id: str):
     )
 
 
+# 中间产物对外暴露：供第三方 API（可灵 Kling identify-face/lip-sync）按 URL 拉取
+# job 目录里的基础视频/音频等。按后缀白名单 + 防目录穿越限制可访问范围。
+_ARTIFACT_MEDIA_TYPES = {
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".m4a": "audio/mp4",
+    ".ass": "text/x-ssa; charset=utf-8",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+}
+
+
+@app.get("/api/video/jobs/{job_id}/artifact/{name}")
+async def get_job_artifact(job_id: str, name: str):
+    """通用产物端点：访问 job 目录下指定名称的中间产物（按后缀白名单）。"""
+    # 防目录穿越：只允许纯文件名
+    if "/" in name or "\\" in name or ".." in name:
+        raise HTTPException(400, "非法文件名")
+    suffix = Path(name).suffix.lower()
+    media_type = _ARTIFACT_MEDIA_TYPES.get(suffix)
+    if media_type is None:
+        raise HTTPException(404, "不支持的产物类型")
+    if not store.get(job_id):
+        raise HTTPException(404, "任务不存在")
+    path = (_LOCAL_JOBS_DIR / job_id / name).resolve()
+    # 二次校验解析后的路径仍在该 job 目录内
+    job_root = (_LOCAL_JOBS_DIR / job_id).resolve()
+    if job_root not in path.parents:
+        raise HTTPException(400, "非法路径")
+    if not path.is_file():
+        raise HTTPException(404, f"{name} 尚未生成或已清理")
+    return FileResponse(
+        str(path), media_type=media_type,
+        headers={"Accept-Ranges": "bytes"},
+    )
+
+
 @app.get("/api/video/jobs/{job_id}/prompt")
 async def get_job_prompt(job_id: str) -> dict:
     """返回该 job 实际提交给腾讯云 VOD 接口的 Prompt 全文（写入 prompt.txt 的快照）。

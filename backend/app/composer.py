@@ -429,6 +429,84 @@ def mux_video_audio(
     return out_path
 
 
+def burn_captions_keep_audio(
+    video_path: Path,
+    out_path: Path,
+    *,
+    audio_path: Path | None = None,
+    storyboard=None,
+    captions: Iterable[tuple[float, float, str]] | None = None,
+) -> Path:
+    """在"已带口播音频的视频"上烧字幕并规范为 9:16，保留原音频不动。
+
+    用于 Kling 路 A：advanced-lip-sync 成片自带口型同步音频，这里只需叠字幕 + 统一规格。
+    字幕来源优先级：显式 captions > TTS 段时长元数据（audio_path 同目录 segments.json） > storyboard。
+    """
+    video_path = Path(video_path)
+    out_path = Path(out_path)
+    if not video_path.is_file():
+        raise ComposerError(f"视频文件不存在：{video_path}")
+
+    total_sec = probe_duration(video_path)
+
+    if captions is not None:
+        cap_list = list(captions)
+    elif audio_path is not None:
+        cap_list = _captions_from_tts_segments(Path(audio_path))
+        if not cap_list:
+            cap_list = _captions_from_storyboard(storyboard)
+    else:
+        cap_list = _captions_from_storyboard(storyboard)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    burn_subs = _ffmpeg_has_filter("subtitles") and cap_list
+    vf_chain = [
+        f"scale={VIDEO_W}:{VIDEO_H}:force_original_aspect_ratio=decrease",
+        f"pad={VIDEO_W}:{VIDEO_H}:(ow-iw)/2:(oh-ih)/2:color=black",
+        "setsar=1",
+        "format=yuv420p",
+    ]
+    if burn_subs:
+        ass_path = out_path.parent / (out_path.stem + ".ass")
+        ass_path.write_text(_build_ass(cap_list, total_sec), encoding="utf-8")
+        ass_arg = (
+            str(ass_path)
+            .replace("\\", "\\\\")
+            .replace(":", r"\:")
+            .replace("'", r"\\\\'")
+            .replace(",", r"\,")
+            .replace("[", r"\[")
+            .replace("]", r"\]")
+        )
+        vf_chain.append(f"subtitles=filename={ass_arg}")
+    else:
+        log.info("burn_captions 跳过字幕（ffmpeg 缺 subtitles/libass 或无字幕条目）")
+    vf = ",".join(vf_chain)
+
+    cmd = [
+        _ffmpeg_bin(), "-y", "-loglevel", "error",
+        "-i", str(video_path),
+        "-vf", vf,
+        "-r", "30",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+        "-pix_fmt", "yuv420p",
+        # 保留原音频（advanced-lip-sync 已带口型同步口播）
+        "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+        "-map", "0:v:0", "-map", "0:a:0?",
+        "-movflags", "+faststart",
+        str(out_path),
+    ]
+    log.info("ffmpeg burn_captions: %s -> %s (%.2fs)", video_path.name, out_path.name, total_sec)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+    except subprocess.CalledProcessError as e:
+        raise ComposerError(
+            f"ffmpeg 烧字幕失败：{e.stderr.decode('utf-8', 'ignore')[-800:]}"
+        ) from e
+    log.info("burn_captions 完成 size=%dB -> %s", out_path.stat().st_size, out_path)
+    return out_path
+
+
 def download_to(url: str, out_path: Path, timeout: float = 120.0) -> Path:
     """把远程 URL 流式下载到本地（motion_control 成片是临时 URL，要尽早落地）。"""
     import urllib.request

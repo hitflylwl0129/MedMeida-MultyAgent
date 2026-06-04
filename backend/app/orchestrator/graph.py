@@ -26,7 +26,7 @@ from ..schemas import (
     VideoJob,
     VideoOutput,
 )
-from .. import composer, doctors as doctors_mod, motion_ref, tts, vod_client
+from .. import composer, doctors as doctors_mod, kling_avatar, kling_base, motion_ref, tts, vod_client
 from ..vod_upload import ensure_doctor_file_id
 
 log = logging.getLogger("video-agent.graph")
@@ -118,6 +118,8 @@ def node_generate(state: GState) -> GState:
         return _generate_local(state)
     if backend_mode == "motion":
         return _generate_motion(state)
+    if backend_mode == "kling":
+        return _generate_kling(state)
     return _generate_aigc(state)
 
 
@@ -386,6 +388,207 @@ def _generate_motion(state: GState) -> GState:
     )
     job.progress = 90
     job.message = f"成片生成完成（{duration:.1f}s · 1080×1920 · motion_control）"
+    _prune_local_jobs(getattr(s, "local_keep_jobs", 20))
+    _emit(state, "st3")
+    return state
+
+
+def _generate_kling(state: GState) -> GState:
+    """路 A：可灵原厂 Kling API → 数字人精准口型同步。
+
+    链路：
+      1) TTS 合成口播 mp3（落 voice.mp3 + voice.segments.json 供字幕对齐）
+      2) 准备基础视频：缓存命中即用；否则 image2video 生成"动作克制"的医生基础视频
+      3) 把基础视频循环到 ≥ 音频时长，落到 job 目录并暴露 artifact url
+      4) identify-face 拿 session_id
+      5) advanced-lip-sync(session_id + 口播 base64) → 口型同步带音频成片
+      6) ffmpeg 烧字幕 + 规范 9:16 → out.mp4
+    """
+    job = state["job"]
+    s = state["settings"]
+    doctor_key = state.get("doctor_key") or s.default_doctor
+
+    if not kling_avatar.credentials_ready(s):
+        job.status = JobStatus.FAILED
+        job.error = "未配置 KLING_ACCESS_KEY / KLING_SECRET_KEY"
+        job.message = job.error
+        state["failed"] = True
+        _emit(state, "st3")
+        return state
+
+    # Kling 接口需公网可拉取的 URL，必须有 PUBLIC_BASE_URL
+    base_public = (s.kling_public_base_url or s.public_base_url or "").rstrip("/")
+    if not base_public:
+        job.status = JobStatus.FAILED
+        job.error = "Kling 路径需配置 KLING_PUBLIC_BASE_URL 或 PUBLIC_BASE_URL（公网可达地址）"
+        job.message = job.error
+        state["failed"] = True
+        _emit(state, "st3")
+        return state
+
+    doctor = doctors_mod.get_doctor(doctor_key) or doctors_mod.get_doctor(s.default_doctor)
+    if not doctor or not doctor.exists:
+        job.status = JobStatus.FAILED
+        job.error = f"医生形象图缺失：{doctor_key}"
+        job.message = job.error
+        state["failed"] = True
+        _emit(state, "st3")
+        return state
+
+    job_dir = _LOCAL_JOBS_DIR / job.id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = job_dir / "voice.mp3"
+    base_loop_path = job_dir / "kling_base_loop.mp4"
+    lipsync_raw_path = job_dir / "kling_lipsync_raw.mp4"
+    out_path = job_dir / "out.mp4"
+
+    # 1) TTS
+    job.status = JobStatus.GENERATING
+    job.progress = 15
+    job.message = "合成口播（TTS）"
+    _emit(state, "st3")
+    narration = (job.storyboard.narration if job.storyboard else "") or job.script.text
+    voice_type = doctors_mod.tts_voice_for_doctor(doctor.key, fallback=s.tts_voice_type)
+    try:
+        tts.synthesize_to_mp3(narration, audio_path, settings=s, voice_type=voice_type)
+    except Exception as e:  # noqa: BLE001
+        job.status = JobStatus.FAILED
+        job.error = f"TTS 合成失败：{e}"
+        job.message = job.error
+        state["failed"] = True
+        _emit(state, "st3")
+        return state
+
+    try:
+        audio_sec = composer.probe_duration(audio_path)
+    except composer.ComposerError as e:
+        job.status = JobStatus.FAILED
+        job.error = f"探测口播时长失败：{e}"
+        job.message = job.error
+        state["failed"] = True
+        _emit(state, "st3")
+        return state
+
+    # 2) 基础视频（缓存命中直用，否则 image2video）
+    job.progress = 25
+    job.message = "准备医生基础视频（首次约 3 分钟，命中缓存秒级）"
+    _emit(state, "st3")
+
+    def _i2v_progress(pct: int, msg: str) -> None:
+        # 把 kling_avatar 内部 30~50% 的进度转译给上游 UI
+        job.progress = pct
+        job.message = msg
+        _emit(state, "st3")
+
+    try:
+        base_video = kling_base.ensure_base_video(doctor.key, settings=s, progress=_i2v_progress)
+    except kling_avatar.KlingError as e:
+        job.status = JobStatus.FAILED
+        job.error = f"基础视频准备失败：{e}"
+        job.message = job.error
+        state["failed"] = True
+        _emit(state, "st3")
+        return state
+
+    # 3) 循环到 ≥ 音频时长并落到 job 目录（供 artifact 暴露）
+    job.progress = 50
+    job.message = f"基础视频循环至 ≥{audio_sec:.1f}s 覆盖口播"
+    _emit(state, "st3")
+    try:
+        kling_base.make_loop_for_duration(base_video, base_loop_path, audio_sec)
+    except Exception as e:  # noqa: BLE001
+        job.status = JobStatus.FAILED
+        job.error = f"循环基础视频失败：{e}"
+        job.message = job.error
+        state["failed"] = True
+        _emit(state, "st3")
+        return state
+
+    base_loop_url = f"{base_public}/api/video/jobs/{job.id}/artifact/kling_base_loop.mp4"
+
+    # 4) identify-face
+    job.progress = 55
+    job.message = "识别人脸（identify-face）"
+    _emit(state, "st3")
+    try:
+        session_id, faces = kling_avatar.identify_face(s, base_loop_url)
+    except kling_avatar.KlingError as e:
+        job.status = JobStatus.FAILED
+        job.error = f"人脸识别失败：{e}"
+        job.message = job.error
+        state["failed"] = True
+        _emit(state, "st3")
+        return state
+    job.task_id = f"kling:{session_id}"
+
+    # 5) advanced-lip-sync
+    job.progress = 58
+    job.message = "提交高级对口型（advanced-lip-sync）"
+    _emit(state, "st3")
+    audio_ms = int(audio_sec * 1000)
+
+    def _lip_progress(pct: int, msg: str) -> None:
+        job.progress = pct
+        job.message = msg
+        _emit(state, "st3")
+
+    try:
+        cdn_url = kling_avatar.advanced_lip_sync(
+            s, session_id, audio_path, audio_ms=audio_ms,
+            face_id=str(faces[0].get("face_id") or "0"),
+            progress=_lip_progress,
+        )
+    except kling_avatar.KlingError as e:
+        job.status = JobStatus.FAILED
+        job.error = str(e)
+        job.message = f"口型同步失败：{e}"
+        state["failed"] = True
+        _emit(state, "st3")
+        return state
+
+    # 落盘 lip-sync 原片
+    job.progress = 82
+    job.message = "下载口型同步成片"
+    _emit(state, "st3")
+    try:
+        kling_avatar.download(cdn_url, lipsync_raw_path)
+    except kling_avatar.KlingError as e:
+        job.status = JobStatus.FAILED
+        job.error = str(e)
+        job.message = f"下载失败：{e}"
+        state["failed"] = True
+        _emit(state, "st3")
+        return state
+
+    # 6) 烧字幕（保留原音频）+ 规范 9:16
+    job.progress = 88
+    job.message = "烧录字幕（按 TTS 段时长逐句对齐）"
+    _emit(state, "st3")
+    try:
+        composer.burn_captions_keep_audio(
+            lipsync_raw_path, out_path,
+            audio_path=audio_path, storyboard=job.storyboard,
+        )
+    except composer.ComposerError as e:
+        job.status = JobStatus.FAILED
+        job.error = f"烧字幕失败：{e}"
+        job.message = job.error
+        state["failed"] = True
+        _emit(state, "st3")
+        return state
+
+    duration = composer.probe_duration(out_path)
+    base = (s.public_base_url or "").rstrip("/")
+    job.output = VideoOutput(
+        file_id="",
+        url=f"{base}/api/video/jobs/{job.id}/file",
+        cover_url=f"{base}/api/doctors/{doctor.key}/image",
+        duration_sec=round(duration, 2),
+        width=composer.VIDEO_W,
+        height=composer.VIDEO_H,
+    )
+    job.progress = 92
+    job.message = f"成片生成完成（{duration:.1f}s · 1080×1920 · Kling 高级对口型）"
     _prune_local_jobs(getattr(s, "local_keep_jobs", 20))
     _emit(state, "st3")
     return state

@@ -40,7 +40,30 @@ class Settings(BaseSettings):
     # local：本地 TTS+ffmpeg 拼"医生静帧+真实口播"（默认；无需白名单）
     # motion：腾讯云 motion_control（医生图+参考动作视频→医生动作迁移）+ 本地 TTS 拼音轨
     # aigc：调腾讯云 CreateAigcVideoTask（avatar_i2v，需要白名单）
+    # kling：可灵原厂 API（image2video 造克制基础视频 → identify-face → advanced-lip-sync），
+    #        口型与口播严格同步、嘴部幅度自然，最终烧字幕。需 KLING_ACCESS_KEY/SECRET_KEY。
     video_backend: str = "local"
+
+    # ---- 可灵 Kling 原厂 API（路 A：image2video + advanced-lip-sync） ----
+    kling_access_key: str = ""
+    kling_secret_key: str = ""
+    kling_base_url: str = "https://api-beijing.klingai.com"
+    # image2video 造"动作克制的医生基础视频"
+    kling_image_model: str = "kling-v1-6"
+    kling_base_duration: str = "10"          # 单段基础视频时长（接口支持 5/10）
+    kling_base_mode: str = "std"             # std / pro
+    kling_base_cfg_scale: float = 0.5
+    kling_base_prompt: str = (
+        "医生端庄站立，面对镜头，表情专业亲和，嘴唇自然闭合保持微笑，"
+        "仅有轻微的眨眼和极小幅度的点头，身体基本静止，不说话，画面稳定，无夸张表情"
+    )
+    kling_base_negative_prompt: str = "张嘴说话，夸张表情，剧烈晃动，大幅动作，变形"
+    # 轮询
+    kling_poll_interval_sec: int = 10
+    kling_poll_timeout_sec: int = 600
+    # 给可灵拉取素材（基础视频）用的公网基地址；留空则回退 public_base_url。
+    # 注意：identify-face 需要从公网拉取我们暴露的基础视频，必须是可灵可达的绝对地址。
+    kling_public_base_url: str = ""
 
     # ---- motion_control 默认参数 ----
     motion_ref_filename: str = "ref.mp4"   # 参考动作视频文件名（位于 backend/assets/motion_ref/）

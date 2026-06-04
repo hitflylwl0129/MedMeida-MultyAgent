@@ -19,3 +19,7 @@ vod-python-sdk>=1.4.4
 # 话术 Agent LLM 客户端（OpenAI 兼容端点：腾讯云 lkeap / hy3-preview）
 openai>=1.40
 
+# 可灵 Kling 原厂 API（路 A：image2video + advanced-lip-sync）
+PyJWT>=2.8
+requests>=2.31
+

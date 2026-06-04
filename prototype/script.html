@@ -515,7 +515,7 @@ function renderDraft(){
 }
 
 /* ===== 真实 LLM 调用：POST SSE 流，边出 token 边打字机 ===== */
-const BACKEND='http://127.0.0.1:8000';
+const BACKEND='';
 let _scriptResult=null;   /* 缓存本轮 LLM 终稿，给 persistScript / renderDownstream 用 */
 async function streamRealScript(a){
   _scriptResult=null;

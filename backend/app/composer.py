@@ -86,6 +86,37 @@ def _fmt_ass_time(sec: float) -> str:
     return f"{h}:{m:02d}:{s:05.2f}"
 
 
+def _wrap_caption_cn(text: str, max_per_line: int = 14, max_lines: int = 2) -> str:
+    """中文字幕主动换行：每 max_per_line 字插入 ASS 强制换行符 \\N。
+
+    - 中文一行 1080 宽 fontsize=58 时大约容 12-14 字；竖版底部用 2 行最稳。
+    - 超过 max_lines 行的部分直接截断，保留 max_lines 行完整内容，避免遮住画面。
+    - 不动标点位置：能在标点后断就在标点后断，避免标点带头。
+    """
+    if not text:
+        return ""
+    # 先按"非标点边界 + 软标点"贪心切片
+    soft = "，、,。！？!?；;：:"  # 中英标点都视作偏好的断点
+    chunks: list[str] = []
+    buf = ""
+    for ch in text:
+        buf += ch
+        # 达到上限时优先在标点处断（包括当前字符是标点的情况）
+        if len(buf) >= max_per_line:
+            chunks.append(buf)
+            buf = ""
+    if buf:
+        chunks.append(buf)
+    # 限制总行数
+    if len(chunks) > max_lines:
+        kept = chunks[:max_lines]
+        # 把最后一行补 …
+        if kept and len(kept[-1]) >= max_per_line:
+            kept[-1] = kept[-1][: max_per_line - 1] + "…"
+        chunks = kept
+    return r"\N".join(chunks)
+
+
 def _build_ass(captions: list[tuple[float, float, str]], total_sec: float) -> str:
     """把 (start, end, text) 列表编成 ASS 字幕文本。
 
@@ -95,12 +126,12 @@ def _build_ass(captions: list[tuple[float, float, str]], total_sec: float) -> st
 ScriptType: v4.00+
 PlayResX: {VIDEO_W}
 PlayResY: {VIDEO_H}
-WrapStyle: 2
+WrapStyle: 0
 ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,{DEFAULT_FONT_NAME},64,&H00FFFFFF,&H00000000,&H80000000,1,3,0,2,2,80,80,160,1
+Style: Cap,{DEFAULT_FONT_NAME},58,&H00FFFFFF,&H00000000,&H80000000,1,3,0,2,2,80,80,180,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -117,6 +148,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             continue
         # ASS 文本里需 escape 大括号；我们的 cap 里基本只有汉字+标点，简单清洗
         safe = text.replace("\n", " ").replace("{", "(").replace("}", ")")
+        # 中文长句按 14 字软换行，限 2 行（避免长句撑出画面）
+        safe = _wrap_caption_cn(safe, max_per_line=14, max_lines=2)
         lines.append(
             f"Dialogue: 0,{_fmt_ass_time(s_start)},{_fmt_ass_time(s_end)},Cap,,0,0,0,,{safe}"
         )
@@ -139,6 +172,39 @@ def _captions_from_storyboard(storyboard) -> list[tuple[float, float, str]]:
             cur += dur
             continue
         out.append((cur, cur + dur, cap))
+        cur += dur
+    return out
+
+
+def _captions_from_tts_segments(audio_path: Path) -> list[tuple[float, float, str]]:
+    """优先源：从 TTS 边带元数据 `<stem>.segments.json` 还原"字幕=口播原句+真实段时长"。
+
+    返回 (start, end, text) 序列；找不到/解析失败返回空列表，由调用方降级到 storyboard。
+
+    元数据由 tts.synthesize_to_mp3 写入，结构：
+        {"segments":[{"idx":0,"text":"...","duration_sec":2.34}, ...],
+         "total_sec":15.74}
+    """
+    import json as _json
+    meta_path = Path(audio_path).with_name(Path(audio_path).stem + ".segments.json")
+    if not meta_path.is_file():
+        return []
+    try:
+        data = _json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    segs = data.get("segments") or []
+    out: list[tuple[float, float, str]] = []
+    cur = 0.0
+    for s in segs:
+        text = (s.get("text") or "").strip()
+        dur = float(s.get("duration_sec") or 0.0)
+        if dur <= 0:
+            continue
+        if not text:
+            cur += dur
+            continue
+        out.append((cur, cur + dur, text))
         cur += dur
     return out
 
@@ -196,7 +262,13 @@ def compose_static_video(
     # 字幕（可选）：仅当 ffmpeg 同时具备 subtitles 滤镜与 libass 时才烧录。
     # macOS brew 的默认 ffmpeg 多数未编译 libass/freetype，烧录会失败；这里检测后
     # 优雅降级——画面只放医生静帧+口播，字幕由前端镜头表呈现。
-    cap_list = list(captions) if captions is not None else _captions_from_storyboard(storyboard)
+    # 字幕来源优先级：调用方显式传入 > TTS 段时长元数据（口播原句对齐） > storyboard 兜底
+    if captions is not None:
+        cap_list = list(captions)
+    else:
+        cap_list = _captions_from_tts_segments(audio_path)
+        if not cap_list:
+            cap_list = _captions_from_storyboard(storyboard)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     burn_subs = _ffmpeg_has_filter("subtitles") and cap_list
@@ -292,7 +364,14 @@ def mux_video_audio(
     audio_sec = probe_duration(audio_path)
     total_sec = audio_sec + max(0.0, tail_silence_sec)
 
-    cap_list = list(captions) if captions is not None else _captions_from_storyboard(storyboard)
+    # 字幕来源优先级（与 compose_static_video 一致）：
+    #   显式 captions > TTS 段时长元数据（口播原句逐句对齐） > storyboard 兜底
+    if captions is not None:
+        cap_list = list(captions)
+    else:
+        cap_list = _captions_from_tts_segments(audio_path)
+        if not cap_list:
+            cap_list = _captions_from_storyboard(storyboard)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     burn_subs = _ffmpeg_has_filter("subtitles") and cap_list

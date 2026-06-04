@@ -196,6 +196,27 @@ def _concat_mp3(parts: list[Path], out_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 # 对外入口
 # --------------------------------------------------------------------------- #
+def _probe_audio_duration(path: Path) -> float:
+    """用 ffprobe 探测单段音频时长（秒），失败返回 0.0（不抛，TTS 流程仍可继续）。"""
+    try:
+        import os as _os
+        ffmpeg_bin = _os.environ.get("FFMPEG_BIN") or "ffmpeg"
+        # ffprobe 一般与 ffmpeg 同目录；若是绝对路径取同目录的 ffprobe
+        ffprobe_bin = "ffprobe"
+        if "/" in ffmpeg_bin or "\\" in ffmpeg_bin:
+            cand = Path(ffmpeg_bin).with_name("ffprobe")
+            if cand.is_file():
+                ffprobe_bin = str(cand)
+        r = subprocess.run(
+            [ffprobe_bin, "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=nw=1:nk=1", str(path)],
+            check=True, capture_output=True, text=True,
+        )
+        return float(r.stdout.strip() or 0.0)
+    except (subprocess.CalledProcessError, ValueError, FileNotFoundError):
+        return 0.0
+
+
 def synthesize_to_mp3(
     text: str,
     out_path: Path,
@@ -210,6 +231,11 @@ def synthesize_to_mp3(
 
     超过 150 字会自动按句切分，逐段合成后 ffmpeg 拼接。
     返回最终文件路径（== out_path）。
+
+    边带产物：同目录写一份 `<out_stem>.segments.json`，结构：
+        {"segments":[{"idx":0,"text":"...","duration_sec":2.34}, ...],
+         "total_sec":15.74}
+    供下游 composer 按真实段时长生成字幕轨（字幕文本 = 原口播分句）。
     """
     s = settings or get_settings()
     if not (s.tencentcloud_secret_id and s.tencentcloud_secret_key):
@@ -232,6 +258,7 @@ def synthesize_to_mp3(
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="tts_"))
     parts: list[Path] = []
+    segments_meta: list[dict] = []
     try:
         for idx, seg in enumerate(segments):
             log.info("TTS 合成 [%d/%d] %d字", idx + 1, len(segments), len(seg))
@@ -243,8 +270,32 @@ def synthesize_to_mp3(
             p = tmp_dir / f"seg_{idx:03d}.mp3"
             p.write_bytes(audio)
             parts.append(p)
+            # 立刻探测本段时长，写入 segments_meta（用于字幕轨对齐口播）
+            dur = _probe_audio_duration(p)
+            segments_meta.append({"idx": idx, "text": seg, "duration_sec": round(dur, 3)})
+
         _concat_mp3(parts, out_path)
-        log.info("TTS 合成完成 -> %s (%d段)", out_path, len(parts))
+        total_sec = round(sum(m["duration_sec"] for m in segments_meta), 3)
+        # 落盘边带元数据（失败不影响主链路）
+        meta_path = out_path.with_suffix(out_path.suffix + ".segments.json")
+        # 上面 .suffix=".mp3" 加 .segments.json → "voice.mp3.segments.json"，
+        # 更直观一点用 stem 写：voice.segments.json
+        meta_path = out_path.with_name(out_path.stem + ".segments.json")
+        try:
+            meta_path.write_text(
+                json.dumps(
+                    {"segments": segments_meta, "total_sec": total_sec},
+                    ensure_ascii=False, indent=2,
+                ),
+                encoding="utf-8",
+            )
+            log.info(
+                "TTS 合成完成 -> %s (%d段, total=%.2fs, meta=%s)",
+                out_path, len(parts), total_sec, meta_path.name,
+            )
+        except OSError as e:  # noqa: BLE001
+            log.warning("写 segments.json 失败：%s", e)
+            log.info("TTS 合成完成 -> %s (%d段)", out_path, len(parts))
         return out_path
     finally:
         # 清理临时片段

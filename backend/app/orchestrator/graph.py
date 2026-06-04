@@ -183,8 +183,11 @@ def _generate_local(state: GState) -> GState:
         return state
 
     duration = composer.probe_duration(video_path)
-    # 写绝对 URL：前端是用 file:// 或独立静态服务打开的，跨源播放需要绝对地址
-    base = f"http://{s.app_host or '127.0.0.1'}:{s.app_port or 8000}"
+    # output.url 拼法：
+    #   - 默认走相对路径，浏览器按当前页 origin 拼接（适配 nginx 反代同源场景）；
+    #   - 若显式配置了 PUBLIC_BASE_URL（如 http://162.14.76.209），用绝对路径，
+    #     兼容前端用 file:// 直开 HTML 这类跨源场景。
+    base = (s.public_base_url or "").rstrip("/")
     job.task_id = f"local-{job.id}"
     job.output = VideoOutput(
         file_id="",
@@ -371,7 +374,8 @@ def _generate_motion(state: GState) -> GState:
         return state
 
     duration = composer.probe_duration(video_path)
-    base = f"http://{s.app_host or '127.0.0.1'}:{s.app_port or 8000}"
+    # 同 _generate_local：默认相对路径，PUBLIC_BASE_URL 显式配置时改用绝对路径。
+    base = (s.public_base_url or "").rstrip("/")
     job.output = VideoOutput(
         file_id="",
         url=f"{base}/api/video/jobs/{job.id}/file",

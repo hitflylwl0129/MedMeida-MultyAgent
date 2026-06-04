@@ -95,6 +95,11 @@ class Settings(BaseSettings):
     # 服务
     app_host: str = "127.0.0.1"
     app_port: int = 8000
+    # 对外可访问的基地址（用于拼 output.url / cover_url 给前端播放）：
+    #   - 留空（默认）：写相对路径 /api/...，浏览器按当前页 origin 自动拼，
+    #     适配「同源 nginx 反代上线 + 本地 http://localhost:8848 反代」常见场景。
+    #   - 显式填如 http://162.14.76.209 ：写绝对路径，兼容 file:// 直开 HTML 跨源场景。
+    public_base_url: str = ""
 
     @property
     def credentials_ready(self) -> bool:

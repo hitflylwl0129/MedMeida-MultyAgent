@@ -43,3 +43,10 @@ build/
 *.tmp
 *.bak
 *.bak.*
+
+# Kling 探活/对比临时产物（不入库）
+kling_*.mp4
+kling_*.jpg
+kling_compare/
+*.mp4
+*.mp3

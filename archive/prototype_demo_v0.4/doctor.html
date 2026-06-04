@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>选医生 Agent · 推导链路深度演示</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#171a23; --panel2:#1d212c; --line:#2a2f3d;
+    --txt:#e6e9ef; --txt2:#9aa3b2; --txt3:#6b7382;
+    --brand:#4f7cff; --brand2:#7a5cff; --ok:#22c08b; --warn:#f0a93b; --err:#f25c66;
+    --chip:#222736;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;font-size:14px}
+  .topbar{height:56px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:var(--panel);position:sticky;top:0;z-index:10}
+  .topbar .l{display:flex;align-items:center;gap:14px}
+  .topbar .back{color:var(--txt3);text-decoration:none;font-size:13px;display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
+  .topbar .back:hover{color:var(--txt);background:var(--panel2)}
+  .topbar h1{font-size:15px;font-weight:600}
+  .topbar h1 small{display:block;color:var(--txt3);font-weight:400;font-size:11.5px;margin-top:1px}
+  .btn{border:none;border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+  .btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+  .btn.sm{padding:6px 12px;font-size:12px}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px}
+  .sectitle{font-size:11.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;margin:4px 0 12px;display:flex;align-items:center;gap:8px}
+  .sectitle .num{width:20px;height:20px;border-radius:6px;background:var(--chip);display:inline-grid;place-items:center;color:var(--txt2);font-size:11px}
+  /* stage */
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:18px;position:relative;opacity:.4;transition:.4s;filter:saturate(.4)}
+  .stage.on{opacity:1;filter:none}
+  .stage .arrow-d{position:absolute;left:50%;bottom:-22px;transform:translateX(-50%);color:var(--txt3);font-size:18px;z-index:2}
+  .stage.on .sectitle .num{background:var(--brand);color:#fff}
+  /* signal cards */
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:820px){.grid3{grid-template-columns:1fr}}
+  .scard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .scard .hd{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .scard .ic{width:34px;height:34px;border-radius:9px;background:var(--chip);display:grid;place-items:center;font-size:17px}
+  .scard .hd h4{font-size:13.5px}
+  .scard .hd p{font-size:11px;color:var(--txt3)}
+  .scard ul{list-style:none;font-size:12px;color:var(--txt2);line-height:1.95}
+  .scard ul li b{color:var(--txt)}
+  .chip{display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:20px;background:var(--chip);color:var(--txt2);margin:3px 4px 0 0}
+  .chip.b{background:rgba(79,124,255,.15);color:#9db8ff}
+  .chip.g{background:rgba(34,192,139,.15);color:var(--ok)}
+  .chip.w{background:rgba(240,169,59,.15);color:var(--warn)}
+  .chip.r{background:rgba(242,92,102,.15);color:var(--err)}
+  .insight{margin-top:14px;background:rgba(79,124,255,.08);border:1px solid rgba(79,124,255,.25);border-radius:10px;padding:11px 13px;font-size:12px;color:#bcd0ff;line-height:1.6}
+  /* query box */
+  .qbox{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--txt2);line-height:1.85}
+  .qbox .k{color:#9fe}
+  .qbox .v{color:#ffd9a0}
+  .qbox .emb{color:var(--txt3)}
+  /* recall funnel */
+  .fstep{position:relative;margin:0 auto 6px;padding:11px 14px;border-radius:9px;background:var(--panel2);border:1px solid var(--line);transition:.5s;opacity:0;transform:translateY(6px)}
+  .fstep.show{opacity:1;transform:none}
+  .fstep .ft{display:flex;justify-content:space-between;align-items:baseline}
+  .fstep .ft .lb{font-size:12.5px;color:var(--txt)}
+  .fstep .ft .vv{font-size:15px;font-weight:700;color:var(--brand);font-variant-numeric:tabular-nums}
+  .fstep .nt{font-size:10.5px;color:var(--txt3);margin-top:3px}
+  .fstep.op{border-style:dashed;border-color:rgba(242,92,102,.4)}
+  .fstep.op .vv{color:var(--err)}
+  .fstep.seed{border-color:rgba(122,92,255,.5);background:rgba(122,92,255,.08)}
+  .fstep.seed .vv{color:#b9a8ff}
+  .fstep.final{border-color:rgba(34,192,139,.55);background:rgba(34,192,139,.1)}
+  .fstep.final .vv{color:var(--ok);font-size:17px}
+  .fconn{text-align:center;color:var(--txt3);font-size:12px;line-height:14px;height:14px}
+  .recall-layout{display:grid;grid-template-columns:1fr 340px;gap:20px}
+  @media(max-width:900px){.recall-layout{grid-template-columns:1fr}}
+  .filtercard{background:rgba(242,92,102,.06);border:1px solid rgba(242,92,102,.3);border-radius:12px;padding:14px;font-size:12px;color:var(--txt2);line-height:1.7}
+  .filtercard h5{font-size:12.5px;color:var(--err);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+  .filtercard .frow{padding:7px 0;border-top:1px dashed var(--line)}
+  .filtercard .frow b{color:var(--txt)}
+  /* scoring candidates */
+  .cand{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+  .cand .ch{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .cand .av{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,#3a4256,#262b39);display:grid;place-items:center;font-size:21px;flex-shrink:0}
+  .cand .ci h4{font-size:14px}
+  .cand .ci .meta{font-size:11px;color:var(--txt3);margin-top:2px}
+  .dimgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 22px}
+  @media(max-width:700px){.dimgrid{grid-template-columns:1fr}}
+  .dim .dt{display:flex;justify-content:space-between;font-size:11px;color:var(--txt2);margin-bottom:3px}
+  .dim .dt b{color:var(--txt);font-variant-numeric:tabular-nums}
+  .dim .track{height:7px;background:var(--chip);border-radius:5px;overflow:hidden}
+  .dim .fill{height:100%;width:0;border-radius:5px;transition:width .9s cubic-bezier(.2,.7,.2,1);background:linear-gradient(90deg,var(--brand),var(--brand2))}
+  .dim.low .fill{background:linear-gradient(90deg,#c4623a,var(--err))}
+  .dim.mid .fill{background:linear-gradient(90deg,var(--warn),#e0b24a)}
+  /* rerank */
+  .tiers{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+  .tier{flex:1;min-width:120px;text-align:center;padding:11px 8px;border-radius:10px;background:var(--panel2);border:1.5px solid var(--line);cursor:pointer;transition:.15s}
+  .tier:hover{border-color:var(--brand)}
+  .tier.sel{border-color:var(--brand);background:rgba(79,124,255,.1)}
+  .tier b{font-size:13px;display:block}
+  .tier span{font-size:10.5px;color:var(--txt3)}
+  .wbar{display:flex;gap:6px;margin:6px 0 16px;font-size:10px;color:var(--txt3);flex-wrap:wrap}
+  .wbar .wi{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:4px 8px}
+  .wbar .wi b{color:#9db8ff;font-variant-numeric:tabular-nums}
+  .rerank-layout{display:grid;grid-template-columns:1fr 320px;gap:20px}
+  @media(max-width:900px){.rerank-layout{grid-template-columns:1fr}}
+  .rank{display:flex;align-items:center;gap:13px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;cursor:pointer;transition:transform .5s cubic-bezier(.2,.7,.2,1),border-color .3s}
+  .rank:hover{border-color:var(--brand)}
+  .rank.top{border-color:rgba(34,192,139,.5);background:linear-gradient(120deg,rgba(34,192,139,.1),var(--panel2))}
+  .rank.sel{border-color:var(--brand);box-shadow:0 0 0 2px rgba(79,124,255,.5)}
+  .rank.top.sel{box-shadow:0 0 0 2px rgba(34,192,139,.55)}
+  .rank .rk{width:26px;height:26px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--txt2);flex-shrink:0}
+  .rank.top .rk{background:var(--ok);color:#06281c}
+  .rank .av{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#3a4256,#262b39);display:grid;place-items:center;font-size:19px;flex-shrink:0}
+  .rank .ri{flex:1;min-width:0}
+  .rank .ri h4{font-size:13.5px}
+  .rank .ri .meta{font-size:10.5px;color:var(--txt3);margin-top:1px}
+  .rank .ri .rs{font-size:10.5px;color:var(--txt2);margin-top:5px;line-height:1.5}
+  .rank .sc{text-align:center;flex-shrink:0}
+  .rank .sc .n{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1;color:var(--brand)}
+  .rank.top .sc .n{color:var(--ok)}
+  .rank .sc .l{font-size:9.5px;color:var(--txt3);margin-top:2px}
+  .delta{font-size:10px;font-weight:600;margin-left:5px}
+  .delta.up{color:var(--ok)} .delta.dn{color:var(--err)}
+  .resultcard{background:linear-gradient(160deg,rgba(34,192,139,.12),rgba(79,124,255,.06));border:1px solid rgba(34,192,139,.35);border-radius:14px;padding:18px;position:sticky;top:76px}
+  .resultcard .rc-av{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#3a4256,#262b39);display:grid;place-items:center;font-size:24px;margin-bottom:10px}
+  .resultcard .big{font-size:18px;font-weight:800;color:var(--txt)}
+  .resultcard .lb{font-size:12px;color:var(--txt2);margin-top:2px}
+  .resultcard hr{border:none;border-top:1px solid var(--line);margin:13px 0}
+  .kv{display:flex;justify-content:space-between;font-size:12px;color:var(--txt2);padding:5px 0}
+  .kv b{color:var(--txt);font-variant-numeric:tabular-nums}
+  .formula{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--txt3);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px;margin-top:12px;line-height:1.7}
+  .formula .hi{color:#9fe}
+  .banner{background:rgba(240,169,59,.1);border:1px solid rgba(240,169,59,.35);color:var(--warn);border-radius:10px;padding:10px 13px;font-size:12px;margin-bottom:16px;line-height:1.55}
+  .pulse{animation:pl 1.4s infinite}
+  @keyframes pl{0%,100%{opacity:1}50%{opacity:.45}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="l">
+    <a class="back" href="index.html">← 返回工作台</a>
+    <div><h1>🩺 选医生 Agent<small>推导链路深度演示 · 检索 Query 构建 → 召回 → 多因子向量打分 → LLM 精排</small></h1></div>
+  </div>
+  <div class="rbtnwrap" style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+    <button class="btn primary" id="runBtn">▶ 开始医生匹配</button>
+    <small id="runHint" style="font-size:10.5px;color:var(--warn);display:none">⚠ 请先在「选品 Agent」完成选品后再匹配医生</small>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="banner">⚠ 核心认知：选医生不是"挑粉丝最多的"。本 Agent 把<b style="color:#ffd9a0">产品功效 + 目标人群约束</b>编码为检索向量，从认证医生库做<b style="color:#ffd9a0">召回 → 向量匹配 → LLM 精排</b>，在<b style="color:#ffd9a0">内容垂类 / 人群重合 / 合规历史 / 商业转化</b>多目标间做加权平衡，并支持按策略实时重排。</div>
+
+  <!-- STAGE 1: 检索 Query 构建 -->
+  <div class="stage" id="st1">
+    <div class="sectitle"><span class="num">1</span>检索 Query 构建（产品 + 人群约束 → 统一检索意图）</div>
+    <div class="grid3">
+      <div class="scard">
+        <div class="hd"><div class="ic" id="prodIc">🦠</div><div><h4>产品需求 <span class="chip g" style="margin-left:2px">↩ 来自①选品 Agent</span></h4><p id="prodSub">活性益生菌 · 保健食品</p></div></div>
+        <ul id="prodUl">
+          <li>功效域：<b>肠道 / 消化健康</b></li>
+          <li>适用：<b>孕妇 / 儿童可用</b></li>
+          <li>合规风险：保健品·疗效宣称受限</li>
+          <li>诉求内容：<b>专业科普向</b></li>
+        </ul>
+        <div style="margin-top:8px" id="prodChips"><span class="chip b">肠道健康</span><span class="chip b">母婴友好</span></div>
+      </div>
+      <div class="scard">
+        <div class="hd"><div class="ic">🎯</div><div><h4>目标人群约束</h4><p>来自②目标人群 Agent</p></div></div>
+        <ul>
+          <li>主体：<b>25-45岁 女性</b></li>
+          <li>兴趣：健康养生 / 母婴育儿</li>
+          <li>地域：<b>一二线 / 新一线</b></li>
+          <li>需医生粉丝<b>高重合</b></li>
+        </ul>
+        <div style="margin-top:8px"><span class="chip b">女性向</span><span class="chip b">科普信任</span></div>
+      </div>
+      <div class="scard">
+        <div class="hd"><div class="ic">🛡</div><div><h4>合规 & 商业约束</h4><p>硬门槛 + 软偏好</p></div></div>
+        <ul>
+          <li>硬门槛：<b>医师执业资质</b></li>
+          <li>硬门槛：<b>近半年无违规</b></li>
+          <li>软偏好：历史带货转化</li>
+          <li>排除：利益冲突 / 竞品代言</li>
+        </ul>
+        <div style="margin-top:8px"><span class="chip w">资质前置校验</span></div>
+      </div>
+    </div>
+    <div class="qbox" id="qbox" style="display:none">
+<span class="k">retrieval_query</span> = {<br>
+&nbsp;&nbsp;<span class="k">"text"</span>: <span class="v" id="qText">"消化内科/营养科医生, 肠道菌群·益生菌科普, 粉丝以25-45岁女性为主, 专业亲和科普风格"</span>,<br>
+&nbsp;&nbsp;<span class="k">"hard_filter"</span>: { 医师资质:<span class="v">required</span>, 近半年违规:<span class="v">0</span>, 竞品代言:<span class="v">exclude</span> },<br>
+&nbsp;&nbsp;<span class="k">"embedding"</span>: <span class="emb">[0.18, -0.42, 0.77, … ] (768d 语义向量)</span><br>
+}
+    </div>
+    <div class="insight" id="fuseOut" style="display:none">🧠 <b>LLM 融合结论：</b>把产品功效域、目标人群画像、合规商业约束融合为一条<b>带硬过滤条件的语义检索 Query</b>，并生成 768 维向量用于后续 ANN 召回——这是"选医生"区别于人工筛号的关键一步。</div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 2: 召回 -->
+  <div class="stage" id="st2">
+    <div class="sectitle"><span class="num">2</span>召回（认证医生库 → 倒排过滤 → 向量 ANN → 候选集）</div>
+    <div class="recall-layout">
+      <div id="funnel"></div>
+      <div>
+        <div class="filtercard">
+          <h5>🚫 召回阶段被前置过滤示例</h5>
+          <div class="frow"><b>吴磊</b> · 健康科普达人 ↦ <span class="chip r">无医师执业资质</span><br>粉丝 220w 但非认证医师，硬门槛直接淘汰。</div>
+          <div class="frow"><b>赵某</b> · 内科 ↦ <span class="chip r">近90天违规1次</span><br>历史疗效宣称被处罚，合规门槛淘汰。</div>
+          <div class="frow"><b>钱某</b> · 营养科 ↦ <span class="chip r">竞品代言冲突</span><br>近期代言同类竞品，利益冲突排除。</div>
+          <div style="margin-top:10px;color:var(--txt3);font-size:11px">硬门槛在召回阶段前置执行，避免把不合规医生带入后续打分。</div>
+        </div>
+      </div>
+    </div>
+    <div class="insight">🔎 召回 = <b>结构化倒排</b>（科室 / 标签 / 资质）+ <b>向量 ANN 检索</b>（语义相似 Top-K）双路融合，把 2,400 位医生快速收敛到 8 位高潜候选送入精排。</div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 3: 多因子打分 -->
+  <div class="stage" id="st3">
+    <div class="sectitle"><span class="num">3</span>多因子向量打分（每位候选 · 5 维量化评分 0-100）</div>
+    <div id="cands"></div>
+    <div class="insight">📐 每个维度都有可解释来源：<b>垂类匹配</b>=内容向量余弦相似度；<b>人群重合</b>=粉丝画像与目标人群 Jaccard；<b>合规历史</b>=违规/资质评分；<b>商业转化</b>=历史带货 ROI；<b>风格契合</b>=口播风格匹配。下一步按策略加权得到精排总分。</div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 4: LLM 精排 -->
+  <div class="stage" id="st4">
+    <div class="sectitle"><span class="num">4</span>LLM 精排（多目标加权 → 排序 · 可切换策略实时重排 · 点击任意候选即可选用）</div>
+    <div class="tiers" id="tiers"></div>
+    <div class="wbar" id="wbar"></div>
+    <div class="rerank-layout">
+      <div id="ranklist"></div>
+      <div>
+        <div class="resultcard">
+          <div class="rc-av" id="rcAv">—</div>
+          <div style="font-size:11px;color:var(--txt3)" id="rcLabel">🏆 当前策略推荐 Top-1</div>
+          <div class="big" id="rcName">—</div>
+          <div class="lb" id="rcMeta">选择上方策略查看</div>
+          <hr>
+          <div class="kv"><span>加权总分</span><b id="rcScore">—</b></div>
+          <div class="kv"><span>核心优势维度</span><b id="rcStrong">—</b></div>
+          <div class="kv"><span>合规状态</span><b id="rcComp">—</b></div>
+          <div class="formula" id="rcFormula"></div>
+        </div>
+      </div>
+    </div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 5: 联动下游 -->
+  <div class="stage" id="st5">
+    <div class="sectitle"><span class="num">5</span>联动下游（选定医生 → 目标人群 Agent）</div>
+    <div class="grid3">
+      <div class="scard">
+        <div class="hd"><div class="ic" id="dsAv">👩‍⚕️</div><div><h4>本环节最终选定 <span class="chip g" style="margin-left:2px">医生已确定</span></h4><p id="dsMeta">—</p></div></div>
+        <ul id="dsUl"></ul>
+        <div style="margin-top:8px" id="dsChips"></div>
+      </div>
+      <div class="scard">
+        <div class="hd"><div class="ic">🔗</div><div><h4>下传信号</h4><p>写入目标人群 Agent 输入</p></div></div>
+        <ul>
+          <li>① <b>医生推荐</b>：科室 / 粉丝量 / 合规 / 加权分</li>
+          <li>② <b>医生粉丝画像</b>：人群 / 垂类 / 平台</li>
+          <li>映射为下游「输入信号融合」卡片</li>
+          <li>叠加 ①选品结果 → 统一人群假设</li>
+        </ul>
+        <div style="margin-top:8px"><span class="chip g">产品 + 医生 已就绪</span></div>
+      </div>
+      <div class="scard" style="display:flex;flex-direction:column;justify-content:space-between">
+        <div>
+          <div class="hd"><div class="ic">🎯</div><div><h4>下游：目标人群 Agent</h4><p>信号融合 → 画像 → 标签 → 人群包</p></div></div>
+          <ul>
+            <li>已就绪输入：<b>产品 + 医生</b></li>
+            <li>下一步：推导可投放定向标签</li>
+            <li>并生成 Lookalike 种子人群包</li>
+          </ul>
+        </div>
+        <a class="btn primary" href="audience.html" style="margin-top:10px;justify-content:center;text-decoration:none">→ 进入目标人群 Agent</a>
+      </div>
+    </div>
+    <div class="insight">🔗 选医生 Agent 的最终选定结果（<b>医生推荐 + 粉丝画像</b>）已下传至<b>目标人群 Agent</b>，与 ①选品结果共同构成其「输入信号融合」的多源输入，驱动后续人群画像与定向标签推导。</div>
+  </div>
+</div>
+
+<script>
+/* ===== 召回漏斗 ===== */
+const RECALL=[
+  {lb:'认证医生总库',v:'2,400 位',nt:'平台已认证创作医生',w:100},
+  {lb:'∩ 科室·内容垂类相关',v:'486 位',nt:'消化/营养/儿科/妇产等相关科室',w:62},
+  {lb:'∩ 标签倒排召回（功效域命中）',v:'152 位',nt:'命中 肠道/益生菌/母婴 标签',w:42},
+  {lb:'⊕ 向量 ANN 检索（Query 嵌入 Top-K）',v:'40 位',nt:'语义相似度 Top-K 拓展召回',w:28,seed:true},
+  {lb:'− 硬门槛过滤（资质/违规/竞品冲突）',v:'32 位',nt:'合规与利益冲突前置淘汰',w:23,op:true},
+  {lb:'进入精排候选集',v:'Top 8',nt:'送入多因子打分 + LLM 精排',w:16,final:true},
+];
+/* ===== 候选 5 维评分: [垂类, 人群, 合规, 转化, 风格] ===== */
+const DIMS=['垂类匹配','人群重合','合规历史','商业转化','风格契合'];
+const CANDS=[
+  {id:'d1',emoji:'👩‍⚕️',name:'李静 主任医师',meta:'消化内科 · 128w粉 · 全能均衡型',comp:'良好·无违规',v:[86,88,76,76,86]},
+  {id:'d2',emoji:'👨‍⚕️',name:'王浩 副主任医师',meta:'营养科 · 76w粉 · 数据派严谨',comp:'良好·无违规',v:[80,73,86,72,75]},
+  {id:'d3',emoji:'👩‍⚕️',name:'陈薇 主治医师',meta:'儿科 · 53w粉 · 温暖母婴向',comp:'良好·无违规',v:[74,82,84,64,85]},
+  {id:'d4',emoji:'🧑‍⚕️',name:'赵敏 主任医师',meta:'消化内科 · 210w粉 · 高流量带货型',comp:'一般·1条提醒',v:[76,90,56,99,68]},
+  {id:'d5',emoji:'👩‍⚕️',name:'林芳 主治医师',meta:'消化内科 · 92w粉 · 垂类内容标杆',comp:'良好·无违规',v:[97,74,74,58,96]},
+  {id:'d6',emoji:'👨‍⚕️',name:'周婷 副主任医师',meta:'妇产科 · 88w粉 · 母婴权威',comp:'良好·无违规',v:[68,82,84,70,79]},
+  {id:'d7',emoji:'🧑‍⚕️',name:'孙凯 主治医师',meta:'全科 · 58w粉 · 零违规合规标杆',comp:'良好·零违规',v:[70,72,99,52,76]},
+  {id:'d8',emoji:'👩‍⚕️',name:'刘洋 副主任医师',meta:'营养科 · 64w粉 · 食疗科普',comp:'良好·无违规',v:[76,74,88,68,78]},
+];
+/* ===== 精排策略权重: [垂类, 人群, 合规, 转化, 风格] 和为1 ===== */
+const STRATS={
+  balanced:{name:'均衡',sub:'推荐 · 多目标平衡',w:[.25,.20,.25,.15,.15]},
+  content :{name:'内容优先',sub:'垂类+风格加权',w:[.40,.15,.20,.05,.20]},
+  conv    :{name:'转化优先',sub:'带货+人群加权',w:[.15,.25,.15,.35,.10]},
+  comp    :{name:'合规优先',sub:'资质安全第一',w:[.20,.15,.45,.10,.10]},
+};
+/* ===== 医生粉丝画像档案：选定医生下传目标人群 Agent「医生推荐 / 粉丝画像」所需字段 ===== */
+const DOC_PROFILE={
+  d1:{audience:'25-45岁女性为主',vertical:'肠道 / 母婴科普',platform:'抖音 / 视频号',chips:['女性向','高信任科普']},
+  d2:{audience:'28-45岁 泛健康人群',vertical:'营养 / 食疗科普',platform:'抖音 / 小红书',chips:['数据严谨','营养科普']},
+  d3:{audience:'25-40岁 宝妈群体',vertical:'儿科 / 母婴',platform:'抖音 / 视频号',chips:['母婴向','温暖亲和']},
+  d4:{audience:'广谱泛健康人群',vertical:'消化 / 健康带货',platform:'抖音',chips:['高流量','强转化']},
+  d5:{audience:'25-45岁 健康人群',vertical:'肠道垂类深耕',platform:'抖音 / B站',chips:['垂类标杆','专业向']},
+  d6:{audience:'孕产 / 育儿女性',vertical:'妇产 / 母婴权威',platform:'视频号 / 抖音',chips:['母婴权威','女性向']},
+  d7:{audience:'泛人群 · 全科',vertical:'全科健康科普',platform:'抖音 / 视频号',chips:['零违规','合规标杆']},
+  d8:{audience:'25-45岁 注重饮食',vertical:'营养 / 食疗',platform:'抖音 / 小红书',chips:['食疗科普','营养向']},
+};
+let hasRunDoc=false, curTop=null;
+function persistDoctor(top){
+  if(!top) return;
+  const m=top.meta.split(' · ');                 /* [科室, 粉丝量, 类型] */
+  const prof=DOC_PROFILE[top.id]||{};
+  const strongIdx=top.v.indexOf(Math.max(...top.v));
+  try{ localStorage.setItem('sv_selected_doctor', JSON.stringify({
+    id:top.id, emoji:top.emoji, name:top.name,
+    dept:m[0]||'', fans:m[1]||'', type:m[2]||'',
+    comp:top.comp, score:top.s, strat:STRATS[curStrat].name, stratKey:curStrat,
+    strongDim:DIMS[strongIdx], strongVal:top.v[strongIdx],
+    audience:prof.audience||'', vertical:prof.vertical||'', platform:prof.platform||'', chips:prof.chips||[]
+  })); }catch(e){}
+}
+
+/* ===== 渲染 ===== */
+function renderFunnel(animate){
+  document.getElementById('funnel').innerHTML=RECALL.map((s,i)=>{
+    const cls=[s.op?'op':'',s.seed?'seed':'',s.final?'final':''].join(' ');
+    return `${i>0?'<div class="fconn">▼</div>':''}
+      <div class="fstep ${cls}"><div class="ft"><span class="lb">${s.lb}</span><span class="vv">${s.v}</span></div>
+      <div class="nt">${s.nt}</div></div>`;
+  }).join('');
+  const steps=document.querySelectorAll('#funnel .fstep');
+  if(animate) steps.forEach((el,i)=>setTimeout(()=>el.classList.add('show'),i*180));
+  else steps.forEach(el=>el.classList.add('show'));
+}
+function dimCls(v){return v>=80?'':v>=68?'mid':'low';}
+function renderCands(animate){
+  document.getElementById('cands').innerHTML=CANDS.map(c=>`
+    <div class="cand">
+      <div class="ch"><div class="av">${c.emoji}</div>
+        <div class="ci"><h4>${c.name} ${c.comp.startsWith('良好')?'<span class="chip g">合规良好</span>':'<span class="chip w">合规提醒</span>'}</h4>
+        <div class="meta">${c.meta}</div></div></div>
+      <div class="dimgrid">
+        ${c.v.map((val,i)=>`<div class="dim ${dimCls(val)}"><div class="dt"><span>${DIMS[i]}</span><b>${val}</b></div>
+          <div class="track"><div class="fill" data-w="${val}" style="width:${animate?0:val}%"></div></div></div>`).join('')}
+      </div>
+    </div>`).join('');
+  if(animate){requestAnimationFrame(()=>setTimeout(()=>{
+    document.querySelectorAll('#cands .fill').forEach(f=>f.style.width=f.dataset.w+'%');},60));}
+}
+let curStrat='balanced', prevRank=null, selId=null;
+function renderTiers(){
+  document.getElementById('tiers').innerHTML=Object.entries(STRATS).map(([k,t])=>`
+    <div class="tier ${k===curStrat?'sel':''}" onclick="pickStrat('${k}')">
+      <b>${t.name}</b><span>${t.sub}</span></div>`).join('');
+  const w=STRATS[curStrat].w;
+  document.getElementById('wbar').innerHTML='权重 → '+DIMS.map((d,i)=>`<span class="wi">${d} <b>${Math.round(w[i]*100)}%</b></span>`).join('');
+}
+function score(c,w){return Math.round(c.v.reduce((s,v,i)=>s+v*w[i],0));}
+function pickStrat(k){curStrat=k;selId=null;renderTiers();renderRank(true);}
+function pickItem(id){selId=id;renderRank(false);}
+function renderRank(animate){
+  const w=STRATS[curStrat].w;
+  const ranked=CANDS.map(c=>({...c,s:score(c,w)})).sort((a,b)=>b.s-a.s);
+  if(!selId || !CANDS.some(c=>c.id===selId)) selId=ranked[0].id;
+  const rankMap={}; ranked.forEach((c,i)=>rankMap[c.id]=i);
+  document.getElementById('ranklist').innerHTML=ranked.map((c,i)=>{
+    let delta='';
+    if(prevRank&&prevRank[c.id]!=null){const d=prevRank[c.id]-i;
+      if(d>0)delta=`<span class="delta up">▲${d}</span>`;else if(d<0)delta=`<span class="delta dn">▼${-d}</span>`;}
+    const strongIdx=c.v.indexOf(Math.max(...c.v));
+    const isSel=c.id===selId;
+    return `<div class="rank ${i===0?'top':''} ${isSel?'sel':''}" onclick="pickItem('${c.id}')">
+      <div class="rk">${i+1}</div><div class="av">${c.emoji}</div>
+      <div class="ri"><h4>${c.name}${delta} ${c.comp.startsWith('良好')?'':'<span class="chip w" style="margin-left:4px">合规提醒</span>'} ${isSel?'<span class="chip g" style="margin-left:4px">✓ 已选用</span>':'<span class="chip b" style="margin-left:4px">点击选用</span>'}</h4>
+        <div class="meta">${c.meta}</div>
+        <div class="rs">最强项：<b style="color:#9db8ff">${DIMS[strongIdx]} ${c.v[strongIdx]}</b> · 当前策略下加权得分突出</div></div>
+      <div class="sc"><div class="n">${c.s}</div><div class="l">加权分</div></div>
+    </div>`;
+  }).join('');
+  prevRank=rankMap;
+  /* 结果卡 = 当前选用医生（默认 Top1，可手动切换为任意候选） */
+  const sel=ranked.find(c=>c.id===selId)||ranked[0];
+  const selRank=rankMap[sel.id], w2=STRATS[curStrat].w;
+  const strongIdx=sel.v.indexOf(Math.max(...sel.v));
+  const set=(id,v)=>document.getElementById(id).textContent=v;
+  document.getElementById('rcAv').textContent=sel.emoji;
+  set('rcName',sel.name); set('rcMeta',sel.meta.split(' · ').slice(0,2).join(' · '));
+  set('rcScore',sel.s); set('rcStrong',DIMS[strongIdx]+' ('+sel.v[strongIdx]+')');
+  document.getElementById('rcComp').textContent=sel.comp;
+  document.getElementById('rcComp').style.color=sel.comp.startsWith('良好')?'var(--ok)':'var(--warn)';
+  const lbl=document.getElementById('rcLabel');
+  if(lbl) lbl.innerHTML=selRank===0?'🏆 当前策略推荐 Top-1（已选用）':`✓ 已手动选用 · 当前策略第 ${selRank+1} 名`;
+  document.getElementById('rcFormula').innerHTML=
+    'score = '+DIMS.map((d,i)=>`<span class="hi">${sel.v[i]}</span>×${w2[i]}`).join(' + ')+
+    `<br>= <span class="hi">${sel.s}</span> （策略：${STRATS[curStrat].name}）`;
+  curTop=sel;
+  if(hasRunDoc){persistDoctor(curTop);renderDownstream();}   /* 匹配完成 / 切换策略 / 手动选用 → 同步刷新第5步选定医生 + 下传给目标人群 Agent */
+}
+/* ===== 第5步：联动下游，填充选定医生卡片 ===== */
+function renderDownstream(){
+  const t=curTop; if(!t) return;
+  const m=t.meta.split(' · '); const prof=DOC_PROFILE[t.id]||{};
+  document.getElementById('dsAv').textContent=t.emoji;
+  document.getElementById('dsMeta').textContent=t.name+' · '+(m[1]||'');
+  document.getElementById('dsUl').innerHTML=
+    `<li>科室：<b>${m[0]||''}</b></li>`+
+    `<li>粉丝主体：<b>${prof.audience||''}</b></li>`+
+    `<li>内容垂类：<b>${prof.vertical||''}</b></li>`+
+    `<li>合规：${t.comp} · 加权分 <b>${t.s}</b></li>`;
+  document.getElementById('dsChips').innerHTML=(prof.chips||[]).map(c=>`<span class="chip b">${c}</span>`).join('');
+}
+
+/* ===== 运行编排 ===== */
+let running=false;
+function run(){
+  if(!SEL){return;}   /* 未完成选品，禁止匹配 */
+  if(running)return; running=true;
+  document.getElementById('runBtn').disabled=true;
+  document.getElementById('runBtn').innerHTML='<span class="pulse">⛓ 匹配中…</span>';
+  ['st1','st2','st3','st4','st5'].forEach(id=>document.getElementById(id).classList.remove('on'));
+  document.getElementById('qbox').style.display='none';
+  document.getElementById('fuseOut').style.display='none';
+  prevRank=null; selId=null; renderTiers();
+  const seq=[
+    [200,()=>on('st1')],
+    [800,()=>{document.getElementById('qbox').style.display='block';}],
+    [800,()=>{document.getElementById('fuseOut').style.display='block';}],
+    [700,()=>{on('st2');renderFunnel(true);}],
+    [1500,()=>{on('st3');renderCands(true);}],
+    [1300,()=>{on('st4');renderRank(true);}],
+    [1200,()=>{on('st5');hasRunDoc=true;persistDoctor(curTop);renderDownstream();}],   /* 选定医生 → 下传目标人群 Agent */
+    [1100,()=>{
+      document.getElementById('runBtn').disabled=false;
+      document.getElementById('runBtn').innerHTML='↻ 重新匹配';
+      running=false;}],
+  ];
+  let acc=0; seq.forEach(([d,fn])=>{acc+=d;setTimeout(fn,acc);});
+}
+function on(id){document.getElementById(id).classList.add('on');}
+document.getElementById('runBtn').onclick=run;
+
+/* ===== 联动选品 Agent：读取其最终选择结果 ===== */
+const SEL=(()=>{try{return JSON.parse(localStorage.getItem('sv_selected_product')||'null');}catch(e){return null;}})();
+function applySelectedProduct(){
+  const runBtn=document.getElementById('runBtn'), hint=document.getElementById('runHint');
+  const ic=document.getElementById('prodIc'), sub=document.getElementById('prodSub');
+  const ul=document.getElementById('prodUl'), chips=document.getElementById('prodChips');
+  const qText=document.getElementById('qText');
+  if(!SEL){
+    /* 未选品：禁用匹配按钮 + 下方小字提示 */
+    runBtn.disabled=true; hint.style.display='block';
+    ic.textContent='❔'; sub.textContent='尚未选品';
+    ul.innerHTML='<li style="color:var(--txt3)">请先在「选品 Agent」完成选品，</li>'+
+                 '<li style="color:var(--txt3)">本步骤将自动关联其最终选择结果。</li>';
+    chips.innerHTML='<span class="chip w">待选品</span>';
+    return;
+  }
+  /* 已选品：自动关联产品需求模块 */
+  runBtn.disabled=false; hint.style.display='none';
+  ic.textContent=SEL.emoji; sub.textContent=SEL.name+' · '+SEL.category;
+  ul.innerHTML=
+    `<li>功效域：<b>${SEL.domain}</b></li>`+
+    `<li>适用：<b>${SEL.applicable}</b></li>`+
+    `<li>合规风险：${SEL.risk}</li>`+
+    `<li>诉求内容：<b>${SEL.appeal}</b></li>`;
+  chips.innerHTML=SEL.chips.map(c=>`<span class="chip b">${c}</span>`).join('');
+  if(qText) qText.textContent=`"${SEL.dept}医生, ${SEL.domain}科普, 粉丝以目标人群为主, ${SEL.appeal}风格"`;
+}
+applySelectedProduct();
+
+/* ===== 恢复已执行状态：已选品且本环节已产出 → 点亮全部步骤并允许重新选择策略 ===== */
+function restoreCompletedDoc(){
+  if(!SEL) return false;
+  let saved=null; try{saved=JSON.parse(localStorage.getItem('sv_selected_doctor')||'null');}catch(e){}
+  if(!saved) return false;
+  if(saved.stratKey && STRATS[saved.stratKey]) curStrat=saved.stratKey;
+  if(saved.id) selId=saved.id;
+  hasRunDoc=true;
+  ['st1','st2','st3','st4','st5'].forEach(on);
+  document.getElementById('qbox').style.display='block';
+  document.getElementById('fuseOut').style.display='block';
+  renderFunnel(false);renderCands(false);renderTiers();prevRank=null;renderRank(false);renderDownstream();
+  document.getElementById('runBtn').innerHTML='↻ 重新匹配';
+  return true;
+}
+
+/* 初始：已执行→恢复完成态可编辑；未执行→静态暗态预览 */
+if(!restoreCompletedDoc()){
+  renderFunnel(false);renderCands(false);renderTiers();renderRank(false);prevRank=null;renderDownstream();
+}
+</script>
+</body>
+</html>

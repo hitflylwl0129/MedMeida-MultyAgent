@@ -1,0 +1,15 @@
+# 密钥：绝不入库
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 运行产物
+*.db
+*.sqlite3
+*.log
+data/
+.cache/

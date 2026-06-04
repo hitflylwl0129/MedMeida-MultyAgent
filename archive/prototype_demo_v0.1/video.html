@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>短视频制作 Agent · 推导链路深度演示</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#171a23; --panel2:#1d212c; --line:#2a2f3d;
+    --txt:#e6e9ef; --txt2:#9aa3b2; --txt3:#6b7382;
+    --brand:#4f7cff; --brand2:#7a5cff; --ok:#22c08b; --warn:#f0a93b; --err:#f25c66;
+    --chip:#222736;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;font-size:14px}
+  .topbar{height:56px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:var(--panel);position:sticky;top:0;z-index:10}
+  .topbar .l{display:flex;align-items:center;gap:14px}
+  .topbar .back{color:var(--txt3);text-decoration:none;font-size:13px;display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
+  .topbar .back:hover{color:var(--txt);background:var(--panel2)}
+  .topbar h1{font-size:15px;font-weight:600}
+  .topbar h1 small{display:block;color:var(--txt3);font-weight:400;font-size:11.5px;margin-top:1px}
+  .btn{border:none;border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+  .btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px}
+  .sectitle{font-size:11.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;margin:4px 0 12px;display:flex;align-items:center;gap:8px}
+  .sectitle .num{width:20px;height:20px;border-radius:6px;background:var(--chip);display:inline-grid;place-items:center;color:var(--txt2);font-size:11px}
+  /* stage */
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:18px;position:relative;opacity:.4;transition:.4s;filter:saturate(.4)}
+  .stage.on{opacity:1;filter:none}
+  .stage .arrow-d{position:absolute;left:50%;bottom:-22px;transform:translateX(-50%);color:var(--txt3);font-size:18px;z-index:2}
+  .stage.on .sectitle .num{background:var(--brand);color:#fff}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:820px){.grid3{grid-template-columns:1fr}}
+  .scard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .scard .hd{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .scard .ic{width:34px;height:34px;border-radius:9px;background:var(--chip);display:grid;place-items:center;font-size:17px}
+  .scard .hd h4{font-size:13.5px}
+  .scard .hd p{font-size:11px;color:var(--txt3)}
+  .scard ul{list-style:none;font-size:12px;color:var(--txt2);line-height:1.95}
+  .scard ul li b{color:var(--txt)}
+  .chip{display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:20px;background:var(--chip);color:var(--txt2);margin:3px 4px 0 0}
+  .chip.b{background:rgba(79,124,255,.15);color:#9db8ff}
+  .chip.g{background:rgba(34,192,139,.15);color:var(--ok)}
+  .chip.w{background:rgba(240,169,59,.15);color:var(--warn)}
+  .insight{margin-top:14px;background:rgba(79,124,255,.08);border:1px solid rgba(79,124,255,.25);border-radius:10px;padding:11px 13px;font-size:12px;color:#bcd0ff;line-height:1.6}
+  .scriptbox{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:14px}
+  .scriptbox p{font-size:13.5px;line-height:2;color:var(--txt)}
+  .hlk{background:rgba(34,192,139,.2);color:#9fe;border-radius:3px;padding:0 3px}
+  .scriptbox .meta{margin-top:10px;font-size:10.5px;color:var(--txt3);display:flex;gap:14px;flex-wrap:wrap;border-top:1px dashed var(--line);padding-top:9px}
+  /* storyboard */
+  .sblayout{display:grid;grid-template-columns:1fr 220px;gap:20px}
+  @media(max-width:900px){.sblayout{grid-template-columns:1fr}}
+  table.sb{width:100%;border-collapse:collapse;font-size:11.5px}
+  table.sb th,table.sb td{border:1px solid var(--line);padding:8px 9px;text-align:left;vertical-align:top}
+  table.sb th{background:var(--panel2);color:var(--txt2);font-weight:600}
+  table.sb td:first-child{color:var(--txt);font-weight:600}
+  .sbrow{opacity:0;transform:translateY(5px);transition:.4s}
+  .sbrow.show{opacity:1;transform:none}
+  .vidbox{aspect-ratio:9/16;background:linear-gradient(160deg,#222a3d,#161a26);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;position:relative;overflow:hidden}
+  .vidbox .play{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.15);display:grid;place-items:center;font-size:20px}
+  .vidbox .cap{position:absolute;bottom:14px;left:10px;right:10px;text-align:center;font-size:11px;background:rgba(0,0,0,.5);border-radius:6px;padding:5px;line-height:1.5}
+  .vidbox .av{font-size:46px}
+  .player{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:14px;margin-bottom:12px;display:flex;align-items:center;gap:12px}
+  .player .pbtn{width:38px;height:38px;border-radius:50%;background:var(--brand);display:grid;place-items:center;cursor:pointer;flex-shrink:0;color:#fff}
+  .player .wave{flex:1;height:30px;display:flex;align-items:center;gap:2px}
+  .player .wave i{flex:1;background:linear-gradient(var(--brand),var(--brand2));border-radius:2px;opacity:.6}
+  /* compliance */
+  .crow{display:flex;gap:10px;padding:9px 11px;background:var(--panel2);border-radius:9px;margin-bottom:7px;font-size:12px;align-items:flex-start;line-height:1.5}
+  .crow .i{flex-shrink:0}
+  .crow b{color:var(--txt)}
+  .verdict{border-radius:11px;padding:12px 14px;margin-bottom:12px;font-weight:600;display:flex;align-items:center;gap:9px;font-size:13.5px}
+  .verdict.pass{background:rgba(34,192,139,.12);border:1px solid rgba(34,192,139,.4);color:var(--ok)}
+  .scanlist .sc{display:flex;gap:10px;padding:8px 11px;background:var(--panel2);border-radius:9px;margin-bottom:6px;font-size:12px;align-items:center}
+  .scanlist .sc .ok{color:var(--ok)}
+  .banner{background:rgba(240,169,59,.1);border:1px solid rgba(240,169,59,.35);color:var(--warn);border-radius:10px;padding:10px 13px;font-size:12px;margin-bottom:16px;line-height:1.55}
+  .pulse{animation:pl 1.4s infinite}@keyframes pl{0%,100%{opacity:1}50%{opacity:.45}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="l">
+    <a class="back" href="index.html">← 返回工作台</a>
+    <div><h1>🎬 短视频制作 Agent<small>推导链路深度演示 · 接收话术 → 分镜拆解 → TTS配音 → 数字人合成 → 成片多模态合规复审 → 移交分发</small></h1></div>
+  </div>
+  <div class="rbtnwrap" style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+    <button class="btn primary" id="runBtn">▶ 开始制作</button>
+    <small id="runHint" style="font-size:10.5px;color:var(--warn);display:none;max-width:340px;text-align:right;line-height:1.4"></small>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="banner">⚠ 核心认知：合规话术≠合规成片。本 Agent 把<b style="color:#ffd9a0">合规话术终稿</b>拆解为<b style="color:#ffd9a0">分镜脚本 → TTS 配音 → 数字人合成</b>，并对成片做<b style="color:#ffd9a0">多模态合规复审</b>（字幕 OCR + 口播 ASR + 画面），确保"所见即合规"后再移交分发。</div>
+
+  <!-- STAGE 1: 接收话术 -->
+  <div class="stage" id="st1">
+    <div class="sectitle"><span class="num">1</span>接收上游话术（合规终稿 → 制作输入）</div>
+    <div class="grid3">
+      <div class="scard">
+        <div class="hd"><div class="ic" id="scIc">📝</div><div><h4>合规话术终稿 <span class="chip g" style="margin-left:2px">↩ 话术 Agent</span></h4><p id="scSub">—</p></div></div>
+        <div class="scriptbox" style="background:var(--panel);margin-top:2px">
+          <p id="scText" style="font-size:12.5px;line-height:1.85">—</p>
+          <div class="meta" id="scMeta"></div>
+        </div>
+      </div>
+      <div class="scard">
+        <div class="hd"><div class="ic" id="docIc">👩‍⚕️</div><div><h4>出镜医生 / 数字人</h4><p id="docSub">—</p></div></div>
+        <ul id="docUl">
+          <li>出镜：<b>—</b></li>
+          <li>形象：数字人克隆 / 真人素材</li>
+          <li>风格：专业亲和 · 科普向</li>
+          <li>语音：克隆音色 · 自然停顿</li>
+        </ul>
+        <div style="margin-top:8px"><span class="chip b">数字人</span><span class="chip b">音色克隆</span></div>
+      </div>
+      <div class="scard">
+        <div class="hd"><div class="ic">🎯</div><div><h4>投放规格 / 人群</h4><p id="specSub">9:16 竖版</p></div></div>
+        <ul id="specUl">
+          <li>规格：<b>9:16 竖版</b></li>
+          <li>人群：<b>—</b></li>
+          <li>平台：<b>—</b></li>
+          <li>结构：痛点→科普→带入→引导</li>
+        </ul>
+        <div style="margin-top:8px"><span class="chip b">竖版口播</span><span class="chip b">字幕同口径</span></div>
+      </div>
+    </div>
+    <div class="insight" id="fuseOut" style="display:none">🧠 <b>接收结论：</b>以话术 Agent 的<b>合规终稿</b>为唯一文案来源（字幕与口播严格同口径），结合出镜医生形象与投放规格，进入分镜拆解与合成。</div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 2: 分镜拆解 -->
+  <div class="stage" id="st2">
+    <div class="sectitle"><span class="num">2</span>分镜脚本拆解（LLM 结构化 · 镜头 / 时长 / 画面 / 字幕）</div>
+    <table class="sb"><thead><tr><th style="width:7%">镜</th><th style="width:13%">时长</th><th style="width:32%">画面</th><th>口播台词</th><th style="width:20%">字幕</th></tr></thead>
+      <tbody id="sbBody"></tbody>
+    </table>
+    <div class="insight">🎞 分镜由话术正文按「痛点→科普→带入→引导」结构切分，每镜对齐口播与字幕文案；字幕文本即口播文本，保证后续多模态审核口径一致。</div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 3: TTS + 数字人合成 -->
+  <div class="stage" id="st3">
+    <div class="sectitle"><span class="num">3</span>TTS 配音 + 数字人合成</div>
+    <div class="grid3" style="grid-template-columns:1.4fr 220px">
+      <div>
+        <div style="font-size:12px;color:var(--txt2);margin-bottom:8px">🎙 TTS 配音（医生音色克隆 · 可接真实 API）</div>
+        <div class="player"><div class="pbtn">▶</div><div class="wave" id="wave"></div><span style="font-size:11px;color:var(--txt3)" id="dur">00:22</span></div>
+        <ul class="scriptbox" style="list-style:none;font-size:12px;color:var(--txt2);line-height:2">
+          <li>音色：<b style="color:var(--txt)">出镜医生克隆音</b> · 自然停顿</li>
+          <li>语速：中速偏稳 · 科普可信</li>
+          <li>字幕：自动对齐时间轴（逐句）</li>
+          <li>合成：数字人口型驱动 + 背景包装</li>
+        </ul>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--txt2);margin-bottom:8px">🧑‍💻 数字人成片（Mock）</div>
+        <div class="vidbox">
+          <div class="av" id="vAv">👩‍⚕️</div>
+          <div class="play">▶</div>
+          <div style="font-size:11px;color:var(--txt3)">9:16 竖版 · 22s</div>
+          <div class="cap" id="vCap">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="insight">🔊 TTS 生成与话术 Agent 终稿严格一致的口播音轨；数字人口型与音轨对齐，叠加字幕与品牌包装，输出可投放竖版成片（Mock，可接真实数字人/TTS API）。</div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 4: 成片多模态合规复审 -->
+  <div class="stage" id="st4">
+    <div class="sectitle"><span class="num">4</span>成片多模态合规复审（字幕 OCR + 口播 ASR + 画面）</div>
+    <div id="compBox"><div style="color:var(--txt3);font-size:12px">运行后对成片做多模态审核…</div></div>
+    <div class="insight">🛡 成片复审 = <b>字幕 OCR</b> 还原画面文字 + <b>口播 ASR</b> 还原语音文本 + <b>画面要素</b>检测，与话术合规口径逐一比对，确保「字幕/口播/画面」三处均不越界。</div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 5: 移交分发 -->
+  <div class="stage" id="st5">
+    <div class="sectitle"><span class="num">5</span>制作完成（成片 → 移交分发投放）</div>
+    <div class="grid3">
+      <div class="scard">
+        <div class="hd"><div class="ic">🎬</div><div><h4>本环节最终产出 <span class="chip g" style="margin-left:2px" id="okChip">待制作</span></h4><p id="outMeta">—</p></div></div>
+        <ul id="outUl"></ul>
+        <div style="margin-top:8px" id="outChips"></div>
+      </div>
+      <div class="scard">
+        <div class="hd"><div class="ic">🔗</div><div><h4>下传信号</h4><p>写入分发投放</p></div></div>
+        <ul>
+          <li>① <b>合规成片</b>（9:16 · 22s）</li>
+          <li>② <b>字幕 / 音轨 / 封面</b> 素材包</li>
+          <li>③ <b>目标人群包</b> 定向透传</li>
+          <li>多平台分发 + 数据回流</li>
+        </ul>
+        <div style="margin-top:8px"><span class="chip g">成片已过审</span></div>
+      </div>
+      <div class="scard" style="display:flex;flex-direction:column;justify-content:space-between">
+        <div>
+          <div class="hd"><div class="ic">📤</div><div><h4>下游：分发投放</h4><p>抖音 / 视频号 / 快手</p></div></div>
+          <ul>
+            <li>已就绪：<b>合规成片 + 人群包</b></li>
+            <li>定向：上游目标人群包</li>
+            <li>回流：反哺选品/医生/人群模型</li>
+          </ul>
+        </div>
+        <a class="btn primary" href="index.html" style="margin-top:10px;justify-content:center;text-decoration:none">→ 返回流水线工作台</a>
+      </div>
+    </div>
+    <div class="insight">🔗 短视频制作 Agent 产出的<b>合规成片 + 素材包</b>移交分发投放，定向至上游目标人群包，发布后数据回流反哺全链路打分模型，形成自优化闭环。</div>
+  </div>
+</div>
+
+<script>
+/* ===== 上游联动：读取话术 Agent 的合规终稿 ===== */
+const SC=(()=>{try{return JSON.parse(localStorage.getItem('sv_selected_script')||'null');}catch(e){return null;}})();
+const UP_OK=!!SC;
+
+/* ===== 分镜数据：将话术拆为 4 镜 ===== */
+function buildStoryboard(){
+  const d=SC||{};
+  return [
+    {sc:'1',sec:'0-3s',shot:(d.doctorEmoji||'👩‍⚕️')+' 医生正面口播·特写',line:'你是不是也常关注肠道健康？',cap:'肠道也需要日常养护'},
+    {sc:'2',sec:'3-10s',shot:'产品展示 + 菌群动画',line:'我们的肠道里住着大量菌群，维持菌群平衡很重要。',cap:'维持肠道菌群平衡'},
+    {sc:'3',sec:'10-18s',shot:'医生讲解 + 成分图',line:'日常可以适当补充活性益生菌，帮助维持肠道菌群平衡。',cap:'200亿活性菌/条'},
+    {sc:'4',sec:'18-22s',shot:'品牌出镜 + 行动引导',line:'科学养护，从日常做起。',cap:'点击了解更多'},
+  ];
+}
+const SCAN=[
+  ['字幕 OCR','还原画面字幕文本，比对合规口径','无疗效/代言/绝对化用语'],
+  ['口播 ASR','语音转文本，与话术终稿逐句校验','与终稿一致 · 无越界'],
+  ['画面要素','检测画面证书/对比/夸大暗示','无违规视觉元素'],
+  ['口径一致性','字幕 = 口播 = 话术终稿','三处口径完全一致'],
+];
+
+/* ===== 门禁 + 填充 ===== */
+function gateAndFill(){
+  const runBtn=document.getElementById('runBtn'), hint=document.getElementById('runHint');
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  const html=(id,v)=>{const el=document.getElementById(id);if(el)el.innerHTML=v;};
+  if(!UP_OK){
+    runBtn.disabled=true; hint.style.display='block';
+    hint.innerHTML='⚠ 尚未确定结果：<b>话术 Agent</b>，请先完成话术生成并过审、联动下游后再制作';
+    set('scIc','❔'); set('scSub','尚未接收话术');
+    set('scText','请先在「话术 Agent」生成合规话术并联动下游');
+    return;
+  }
+  runBtn.disabled=false; hint.style.display='none';
+  set('scSub','面向「'+SC.seg+'」· '+(SC.duration||'≈22s'));
+  set('scText',SC.text||'');
+  html('scMeta',(SC.meta||[]).map(m=>`<span>✓ ${m}</span>`).join('')+`<span>✓ ${SC.rounds||1} 轮收敛过审</span>`);
+  set('docIc',SC.doctorEmoji||'👩‍⚕️'); set('docSub',(SC.doctor||'—'));
+  html('docUl',
+    `<li>出镜：<b>${SC.doctor||'—'}</b></li>`+
+    `<li>形象：数字人克隆 / 真人素材</li>`+
+    `<li>风格：专业亲和 · 科普向</li>`+
+    `<li>语音：克隆音色 · 自然停顿</li>`);
+  set('specSub','9:16 · '+(SC.platforms||'抖音 + 视频号'));
+  html('specUl',
+    `<li>规格：<b>9:16 竖版 · ${SC.duration||'≈22s'}</b></li>`+
+    `<li>人群：<b>${SC.mainAge||'—'}（${SC.audienceTier||'—'}档）</b></li>`+
+    `<li>平台：<b>${SC.platforms||'抖音 + 视频号'}</b></li>`+
+    `<li>结构：${SC.structure||'痛点→科普→带入→引导'}</li>`);
+  document.getElementById('vAv').textContent=SC.doctorEmoji||'👩‍⚕️';
+  document.getElementById('vCap').innerHTML='日常可补充活性益生菌，<br>帮助维持肠道菌群平衡';
+}
+
+/* ===== 渲染 ===== */
+function renderWave(){
+  document.getElementById('wave').innerHTML=Array.from({length:46}).map(()=>`<i style="height:${20+Math.random()*80}%"></i>`).join('');
+}
+function renderStoryboard(animate){
+  const SB=buildStoryboard();
+  document.getElementById('sbBody').innerHTML=SB.map(s=>`
+    <tr class="sbrow"><td>${s.sc}</td><td>${s.sec}</td><td>${s.shot}</td><td>${s.line}</td><td>${s.cap}</td></tr>`).join('');
+  const rows=document.querySelectorAll('#sbBody .sbrow');
+  if(animate) rows.forEach((r,i)=>setTimeout(()=>r.classList.add('show'),i*220));
+  else rows.forEach(r=>r.classList.add('show'));
+}
+function renderCompliance(){
+  const box=document.getElementById('compBox');
+  box.innerHTML=`<div class="verdict pass" style="opacity:.6"><span class="pulse">🛡</span> <span id="scanMsg">多模态复审中…（字幕 OCR + 口播 ASR + 画面）</span></div><div class="scanlist" id="scanList"></div>`;
+  let d=0;
+  SCAN.forEach(s=>at(400+(d++)*420,()=>{
+    const t=document.getElementById('scanList');if(t)t.innerHTML+=
+      `<div class="sc"><span class="ok">✓</span><div><b>${s[0]}</b> · ${s[1]} <span style="color:var(--ok)">— ${s[2]}</span></div></div>`;
+  }));
+  at(400+SCAN.length*420+300,()=>{
+    const v=document.querySelector('#compBox .verdict');
+    if(v){v.style.opacity='1';v.innerHTML='<span>✓</span> 成片多模态复审通过 · 字幕/口播/画面三处口径一致且合规';}
+  });
+}
+
+/* ===== 编排 ===== */
+let hasRun=false, timers=[];
+function clearTimers(){timers.forEach(t=>clearTimeout(t));timers=[];}
+function at(ms,fn){timers.push(setTimeout(fn,ms));}
+function on(id){const e=document.getElementById(id);e.classList.add('on');e.scrollIntoView({behavior:'smooth',block:'center'});}
+function off(){[].slice.call(arguments).forEach(id=>document.getElementById(id).classList.remove('on'));}
+
+function run(){
+  if(!UP_OK){return;}
+  hasRun=true; clearTimers();
+  const btn=document.getElementById('runBtn');
+  btn.disabled=true; btn.innerHTML='<span class="pulse">🎬 制作中…</span>';
+  off('st2','st3','st4','st5');
+  document.getElementById('compBox').innerHTML='';
+  const seq=[
+    [150,()=>{on('st1');document.getElementById('fuseOut').style.display='block';}],
+    [900,()=>{on('st2');renderStoryboard(true);}],
+    [1500,()=>{on('st3');renderWave();}],
+    [1400,()=>{on('st4');renderCompliance();}],
+    [2500,()=>{on('st5');renderDownstream();
+      document.getElementById('runBtn').disabled=false;
+      document.getElementById('runBtn').innerHTML='↻ 重新制作';}],
+  ];
+  let acc=0; seq.forEach(([d,fn])=>{acc+=d;at(acc,fn);});
+}
+function renderDownstream(){
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  const html=(id,v)=>{const el=document.getElementById(id);if(el)el.innerHTML=v;};
+  document.getElementById('okChip').textContent='合规成片';
+  document.getElementById('okChip').className='chip g';
+  set('outMeta','9:16 竖版 · '+((SC&&SC.duration)||'≈22s')+' · 面向「'+((SC&&SC.seg)||'目标人群')+'」');
+  html('outUl',
+    `<li>成片：<b>数字人口播（Mock）已过审</b></li>`+
+    `<li>素材：字幕 + 音轨 + 封面</li>`+
+    `<li>出镜：${(SC&&SC.doctor)||'—'}</li>`+
+    `<li>多模态复审：<b>字幕/口播/画面 全通过</b></li>`);
+  html('outChips','<span class="chip g">成片合规</span><span class="chip b">9:16 · '+((SC&&SC.duration)||'≈22s')+'</span>');
+}
+
+document.getElementById('runBtn').onclick=run;
+gateAndFill();
+/* 暗态预览 */
+renderWave();renderStoryboard(false);
+</script>
+</body>
+</html>

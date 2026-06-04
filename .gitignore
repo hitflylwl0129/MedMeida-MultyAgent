@@ -1,0 +1,45 @@
+# ===== 密钥 / 凭证（绝不入库）=====
+backend/.env
+**/.env
+**/*.key
+**/*.pem
+backend/mysql-credentials.txt
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ===== 运行产物 / 缓存 / 日志 =====
+backend/.cache/
+backend/data/
+backend/.uvicorn.log
+*.log
+*.db
+*.sqlite3
+
+# ===== 系统 / 编辑器 =====
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ===== Node（如未来引入前端构建）=====
+node_modules/
+dist/
+build/
+
+# ===== 临时文件 =====
+*.tmp
+*.bak
+*.bak.*

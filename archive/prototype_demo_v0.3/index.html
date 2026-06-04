@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>泛健康营销 · 多Agent协同平台 (原型)</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#171a23; --panel2:#1d212c; --line:#2a2f3d;
+    --txt:#e6e9ef; --txt2:#9aa3b2; --txt3:#6b7382;
+    --brand:#4f7cff; --brand2:#7a5cff; --ok:#22c08b; --warn:#f0a93b; --err:#f25c66;
+    --chip:#222736;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--txt);height:100vh;overflow:hidden;font-size:14px}
+  .app{display:grid;grid-template-columns:218px 1fr;height:100vh}
+  /* sidebar */
+  .side{background:linear-gradient(180deg,#141722,#10131b);border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:6px}
+  .logo{display:flex;align-items:center;gap:10px;padding:6px 8px 16px;font-weight:700;font-size:15px}
+  .logo .dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:grid;place-items:center;font-size:14px}
+  .logo small{display:block;color:var(--txt3);font-weight:400;font-size:11px;margin-top:2px}
+  .nav{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;color:var(--txt2);cursor:pointer;font-size:13.5px}
+  .nav:hover{background:var(--panel2);color:var(--txt)}
+  .nav.active{background:rgba(79,124,255,.14);color:#cfe;color:var(--txt);border:1px solid rgba(79,124,255,.35)}
+  .nav .ic{width:18px;text-align:center}
+  .navsec{margin:12px 4px 2px;font-size:10.5px;letter-spacing:.08em;color:var(--txt3);text-transform:uppercase}
+  a.navlink{text-decoration:none}
+  a.navlink:hover{border:1px solid rgba(79,124,255,.25)}
+  .side .foot{margin-top:auto;color:var(--txt3);font-size:11px;line-height:1.6;border-top:1px solid var(--line);padding-top:12px}
+  /* main */
+  .main{overflow:hidden;display:flex;flex-direction:column}
+  .topbar{height:54px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:var(--panel)}
+  .topbar h1{font-size:15px;font-weight:600}
+  .topbar .crumb{color:var(--txt3);font-size:12px;margin-top:2px}
+  .btn{border:none;border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+  .btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+  .btn.sm{padding:6px 12px;font-size:12px}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .content{flex:1;overflow:auto;padding:20px}
+  .page{display:none}
+  .page.show{display:block}
+  /* create page */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .field{margin-bottom:14px}
+  .field label{display:block;color:var(--txt2);font-size:12.5px;margin-bottom:6px}
+  .field input,.field select,.field textarea{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;color:var(--txt);font-size:13px;font-family:inherit}
+  .field textarea{resize:vertical;min-height:70px}
+  .prodgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:8px}
+  .prod{background:var(--panel2);border:1.5px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;transition:.15s}
+  .prod:hover{border-color:var(--brand)}
+  .prod.sel{border-color:var(--brand);background:rgba(79,124,255,.1)}
+  .prod .emoji{font-size:26px}
+  .prod h4{font-size:14px;margin:8px 0 4px}
+  .prod p{color:var(--txt3);font-size:11.5px;line-height:1.5}
+  .prod .tag{display:inline-block;margin-top:8px;font-size:10.5px;padding:2px 8px;border-radius:20px;background:rgba(34,192,139,.15);color:var(--ok)}
+  /* workstation */
+  .ws{display:grid;grid-template-columns:1.15fr 1fr;gap:16px;height:100%}
+  .stepbar{display:flex;gap:0;margin-bottom:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px;overflow-x:auto}
+  .step{flex:1;min-width:96px;text-align:center;padding:9px 6px;border-radius:8px;color:var(--txt3);font-size:12px;position:relative}
+  .step.done{color:var(--ok)} .step.active{color:#fff;background:rgba(79,124,255,.18)} .step.fail{color:var(--err)}
+  .step .n{display:inline-block;width:20px;height:20px;line-height:20px;border-radius:50%;background:var(--chip);font-size:11px;margin-bottom:4px}
+  .step.done .n{background:var(--ok);color:#06281c} .step.active .n{background:var(--brand);color:#fff} .step.fail .n{background:var(--err);color:#fff}
+  .pane{background:var(--panel);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;overflow:hidden}
+  .pane-h{padding:13px 16px;border-bottom:1px solid var(--line);font-weight:600;font-size:13.5px;display:flex;justify-content:space-between;align-items:center}
+  .pane-h .sub{color:var(--txt3);font-weight:400;font-size:11.5px}
+  /* pipeline graph */
+  .flow{padding:16px;overflow:auto;flex:1}
+  .node{background:var(--panel2);border:1.5px solid var(--line);border-radius:11px;padding:12px 14px;margin:0 auto 6px;max-width:330px;position:relative;transition:.25s}
+  .node .row{display:flex;align-items:center;gap:10px}
+  .node .badge{width:30px;height:30px;border-radius:9px;background:var(--chip);display:grid;place-items:center;font-size:15px;flex-shrink:0}
+  .node h4{font-size:13px}
+  .node .desc{color:var(--txt3);font-size:11px;margin-top:2px}
+  .node .stat{margin-left:auto;font-size:11px;padding:3px 9px;border-radius:20px;background:var(--chip);color:var(--txt3)}
+  .node.run{border-color:var(--brand);box-shadow:0 0 0 3px rgba(79,124,255,.12)}
+  .node.run .badge{background:var(--brand)} .node.run .stat{background:rgba(79,124,255,.2);color:#bcd0ff}
+  .node.done{border-color:rgba(34,192,139,.5)} .node.done .badge{background:rgba(34,192,139,.2)} .node.done .stat{background:rgba(34,192,139,.18);color:var(--ok)}
+  .node.fail{border-color:rgba(242,92,102,.6)} .node.fail .stat{background:rgba(242,92,102,.2);color:var(--err)}
+  .node.gate{border-style:dashed;border-color:var(--warn)} .node.gate .stat{background:rgba(240,169,59,.2);color:var(--warn)}
+  .arrow{text-align:center;color:var(--txt3);font-size:14px;height:16px;line-height:16px}
+  .arrow.back{color:var(--err);font-size:11px}
+  .spin{display:inline-block;width:11px;height:11px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-1px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  /* detail panel */
+  .tabs{display:flex;gap:4px;padding:8px 12px;border-bottom:1px solid var(--line);overflow-x:auto}
+  .tab{padding:6px 11px;border-radius:7px;color:var(--txt3);font-size:12px;cursor:pointer;white-space:nowrap}
+  .tab:hover{color:var(--txt)} .tab.active{background:var(--panel2);color:var(--txt)}
+  .tab .pdot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);margin-left:5px}
+  .detail{flex:1;overflow:auto;padding:16px}
+  .empty{color:var(--txt3);text-align:center;padding:50px 20px;font-size:13px}
+  .empty .big{font-size:40px;margin-bottom:10px}
+  /* doctor card */
+  .doc{display:flex;gap:12px;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:12px;margin-bottom:10px}
+  .doc.sel{border-color:var(--brand);background:rgba(79,124,255,.08)}
+  .av{width:46px;height:46px;border-radius:11px;background:linear-gradient(135deg,#3a4256,#262b39);display:grid;place-items:center;font-size:20px;flex-shrink:0}
+  .doc .info{flex:1}
+  .doc .info h4{font-size:13.5px;display:flex;align-items:center;gap:8px}
+  .doc .info .meta{color:var(--txt3);font-size:11.5px;margin:2px 0 6px}
+  .doc .why{font-size:11.5px;color:var(--txt2);line-height:1.55;background:rgba(0,0,0,.2);border-radius:7px;padding:7px 9px}
+  .score{text-align:center;flex-shrink:0}
+  .score .num{font-size:20px;font-weight:700;color:var(--brand)}
+  .score .lbl{font-size:10px;color:var(--txt3)}
+  .chip{display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:20px;background:var(--chip);color:var(--txt2);margin:0 4px 4px 0}
+  .chip.g{background:rgba(34,192,139,.15);color:var(--ok)}
+  .chip.b{background:rgba(79,124,255,.15);color:#9db8ff}
+  /* audience */
+  .bars{margin:6px 0}
+  .bar{margin-bottom:9px}
+  .bar .t{display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);margin-bottom:4px}
+  .bar .track{height:7px;background:var(--chip);border-radius:5px;overflow:hidden}
+  .bar .fill{height:100%;background:linear-gradient(90deg,var(--brand),var(--brand2));border-radius:5px}
+  .pkg{background:rgba(34,192,139,.08);border:1px solid rgba(34,192,139,.3);border-radius:10px;padding:12px;margin-top:12px}
+  .pkg .num{font-size:22px;font-weight:700;color:var(--ok)}
+  /* script */
+  .scriptbox{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:14px;margin-bottom:12px}
+  .scriptbox h4{font-size:13px;margin-bottom:8px;display:flex;justify-content:space-between}
+  .scriptbox p{font-size:12.5px;line-height:1.75;color:var(--txt)}
+  .hl{background:rgba(242,92,102,.22);color:#ffb3b8;border-radius:3px;padding:0 3px;text-decoration:underline wavy var(--err)}
+  .hlk{background:rgba(34,192,139,.2);color:#9fe;border-radius:3px;padding:0 3px}
+  /* compliance */
+  .crow{display:flex;gap:10px;padding:10px 12px;background:var(--panel2);border-radius:9px;margin-bottom:8px;font-size:12.5px;align-items:flex-start}
+  .crow .i{flex-shrink:0}
+  .verdict{border-radius:11px;padding:14px;margin-bottom:14px;font-weight:600;display:flex;align-items:center;gap:10px;font-size:14px}
+  .verdict.pass{background:rgba(34,192,139,.12);border:1px solid rgba(34,192,139,.4);color:var(--ok)}
+  .verdict.block{background:rgba(242,92,102,.12);border:1px solid rgba(242,92,102,.4);color:var(--err)}
+  /* storyboard */
+  table.sb{width:100%;border-collapse:collapse;font-size:11.5px}
+  table.sb th,table.sb td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+  table.sb th{background:var(--panel2);color:var(--txt2);font-weight:600}
+  .player{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:14px;margin-bottom:12px;display:flex;align-items:center;gap:12px}
+  .player .pbtn{width:38px;height:38px;border-radius:50%;background:var(--brand);display:grid;place-items:center;cursor:pointer;flex-shrink:0}
+  .player .wave{flex:1;height:30px;display:flex;align-items:center;gap:2px}
+  .player .wave i{flex:1;background:linear-gradient(var(--brand),var(--brand2));border-radius:2px;opacity:.6}
+  .vidbox{aspect-ratio:9/16;max-width:200px;margin:0 auto;background:linear-gradient(160deg,#222a3d,#161a26);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;position:relative;overflow:hidden}
+  .vidbox .play{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.15);display:grid;place-items:center;font-size:20px}
+  .vidbox .cap{position:absolute;bottom:14px;left:10px;right:10px;text-align:center;font-size:11px;background:rgba(0,0,0,.5);border-radius:6px;padding:5px}
+  /* publish */
+  .plat{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:8px}
+  .plat .pl-ic{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;font-size:16px;flex-shrink:0}
+  .plat .stat2{margin-left:auto;font-size:11px;color:var(--ok)}
+  .kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+  .kpi .k{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;text-align:center}
+  .kpi .k .v{font-size:18px;font-weight:700;color:var(--brand)}
+  .kpi .k .l{font-size:10.5px;color:var(--txt3);margin-top:2px}
+  /* log */
+  .logwrap{border-top:1px solid var(--line);background:#0c0e14;height:128px;overflow:auto;padding:10px 14px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.7}
+  .log .tm{color:var(--txt3)} .log .ag{color:var(--brand2)} .log .ok{color:var(--ok)} .log .er{color:var(--err)} .log .wa{color:var(--warn)}
+  /* modal */
+  .mask{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;place-items:center;z-index:50}
+  .mask.show{display:grid}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;width:440px;max-width:92vw}
+  .modal h3{font-size:16px;margin-bottom:6px}
+  .modal .mdesc{color:var(--txt3);font-size:12.5px;margin-bottom:16px}
+  .modal .acts{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+  .banner{background:rgba(240,169,59,.1);border:1px solid rgba(240,169,59,.35);color:var(--warn);border-radius:10px;padding:10px 13px;font-size:12px;margin-bottom:14px;line-height:1.55}
+  .sectitle{font-size:12px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin:4px 0 10px}
+  /* strategy pills (doctor panel) */
+  .strats{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+  .strat{flex:1;min-width:74px;text-align:center;padding:7px 6px;border-radius:9px;background:var(--panel2);border:1.5px solid var(--line);cursor:pointer;transition:.15s}
+  .strat:hover{border-color:var(--brand)}
+  .strat.sel{border-color:var(--brand);background:rgba(79,124,255,.12)}
+  .strat b{font-size:12px;display:block}
+  .strat span{font-size:9.5px;color:var(--txt3)}
+  .wrow{display:flex;gap:5px;margin-bottom:12px;font-size:9.5px;color:var(--txt3);flex-wrap:wrap}
+  .wrow .wi{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:3px 7px}
+  .wrow .wi b{color:#9db8ff;font-variant-numeric:tabular-nums}
+  .doc .rk{position:absolute;left:-7px;top:-7px;width:20px;height:20px;border-radius:50%;background:var(--chip);color:var(--txt2);font-size:11px;font-weight:700;display:grid;place-items:center;border:1px solid var(--line)}
+  .doc.top .rk{background:var(--ok);color:#06281c}
+  .doc{position:relative}
+  .delta{font-size:10px;font-weight:600;margin-left:5px}
+  .delta.up{color:var(--ok)} .delta.dn{color:var(--err)}
+  /* save / archive */
+  .saverow{display:flex;align-items:center;gap:10px;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
+  .saved-tag{font-size:11.5px;color:var(--ok);display:flex;align-items:center;gap:6px}
+  .node .arch{position:absolute;right:10px;bottom:-7px;font-size:10px;color:var(--ok);background:var(--panel);border:1px solid rgba(34,192,139,.4);border-radius:20px;padding:1px 8px}
+  /* preflight (dry-run) */
+  .pf{display:flex;align-items:flex-start;gap:9px;padding:9px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;margin-bottom:7px;font-size:12px;line-height:1.5}
+  .pf .pi{flex-shrink:0;font-size:14px}
+  .pf.warn{border-color:rgba(240,169,59,.4);background:rgba(240,169,59,.06)}
+  .pf.warn .pi{color:var(--warn)}
+  .pf b{color:var(--txt)}
+  .pf .sub{color:var(--txt3);font-size:11px}
+  .modetag{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600}
+  .modetag.dry{background:rgba(240,169,59,.16);color:var(--warn)}
+  .modetag.exe{background:rgba(34,192,139,.16);color:var(--ok)}
+  /* create-page selection */
+  .minidoc{display:flex;gap:10px;align-items:center;background:var(--panel2);border:1.5px solid var(--line);border-radius:11px;padding:10px 12px;cursor:pointer;transition:.15s;margin-bottom:8px}
+  .minidoc:hover{border-color:var(--brand)}
+  .minidoc.sel{border-color:var(--brand);background:rgba(79,124,255,.1)}
+  .minidoc .av{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#3a4256,#262b39);display:grid;place-items:center;font-size:18px;flex-shrink:0}
+  .minidoc .mi{flex:1;min-width:0}
+  .minidoc .mi h4{font-size:13px;display:flex;align-items:center;gap:6px}
+  .minidoc .mi .meta{font-size:11px;color:var(--txt3);margin-top:1px}
+  .minidoc .msc{text-align:center;flex-shrink:0}
+  .minidoc .msc .n{font-size:17px;font-weight:700;color:var(--brand)}
+  .minidoc .msc .l{font-size:9.5px;color:var(--txt3)}
+  .summary{background:linear-gradient(160deg,rgba(34,192,139,.1),rgba(79,124,255,.05));border:1px solid rgba(34,192,139,.32);border-radius:12px;padding:16px}
+  .srow{display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-top:1px dashed var(--line);font-size:13px}
+  .srow:first-of-type{border-top:none}
+  .srow .sk{width:84px;color:var(--txt3);flex-shrink:0;font-size:12px}
+  .srow .sv{flex:1;color:var(--txt);line-height:1.5}
+  .srow .sv b{color:#9fe}
+  .srow .sv .miss{color:var(--warn)}
+  .linkhint{font-size:11.5px;color:#b9a8ff;background:rgba(122,92,255,.1);border:1px solid rgba(122,92,255,.28);border-radius:8px;padding:8px 11px;margin:2px 0 12px;line-height:1.55}
+  .agentlink{font-size:11.5px;color:var(--txt3);text-decoration:none;border:1px solid var(--line);border-radius:7px;padding:3px 9px;background:var(--panel2)}
+  .agentlink:hover{color:var(--txt);border-color:var(--brand)}
+  .cstep{margin-bottom:20px}
+  .chead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  /* read-only (展示) controls on create page */
+  .rofield{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;color:var(--txt);font-size:13px;line-height:1.65;min-height:42px}
+  .prod.ro,.strat.ro,.minidoc.ro{cursor:default}
+  .prod.ro:hover,.strat.ro:hover,.minidoc.ro:hover{border-color:var(--line)}
+  .prod.ro.sel:hover,.minidoc.ro.sel:hover,.strat.ro.sel:hover{border-color:var(--brand)}
+  .prod.dim,.strat.dim{opacity:.42}
+  /* 历史任务卡片 */
+  .histcard{display:flex;align-items:center;gap:14px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:.15s}
+  .histcard:hover{border-color:var(--brand);background:rgba(79,124,255,.06)}
+  .histcard .hc-ic{width:44px;height:44px;border-radius:11px;background:linear-gradient(135deg,#3a4256,#262b39);display:grid;place-items:center;font-size:22px;flex-shrink:0}
+  .histcard .hc-main{flex:1;min-width:0}
+  .histcard .hc-main h4{font-size:14px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .histcard .hc-meta{font-size:11.5px;color:var(--txt2);margin-top:5px;line-height:1.6}
+  .histcard .hc-time{font-size:10.5px;color:var(--txt3);margin-top:4px}
+  .histcard .hc-go{flex-shrink:0;font-size:12px;color:var(--brand);font-weight:600;white-space:nowrap}
+  .histbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .histbar .hb-clear{font-size:11.5px;color:var(--txt3);cursor:pointer;border:1px solid var(--line);border-radius:7px;padding:5px 10px;background:var(--panel2)}
+  .histbar .hb-clear:hover{color:var(--err);border-color:rgba(242,92,102,.4)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="side">
+    <div class="logo">
+      <span class="dot">◆</span>
+      <div>泛健康营销中台<small>多Agent协同 · 原型</small></div>
+    </div>
+    <a class="nav navlink" href="app.html" style="background:rgba(79,124,255,.14);border:1px solid rgba(79,124,255,.4);color:var(--txt)"><span class="ic">🧭</span>流程视图（按 Agent 顺序）</a>
+    <div class="nav active" data-page="create"><span class="ic">✦</span>发起营销任务</div>
+    <div class="nav" data-page="ws"><span class="ic">⛓</span>流水线工作台</div>
+    <div class="nav" data-page="res"><span class="ic">▤</span>资源库</div>
+    <div class="nav" data-page="list"><span class="ic">≣</span>任务列表</div>
+    <div class="navsec">深度演示</div>
+    <a class="nav navlink" href="product.html"><span class="ic">🛒</span>选品 Agent</a>
+    <a class="nav navlink" href="doctor.html"><span class="ic">🩺</span>选医生 Agent</a>
+    <a class="nav navlink" href="audience.html"><span class="ic">🎯</span>目标人群 Agent</a>
+    <a class="nav navlink" href="script.html"><span class="ic">✍️</span>话术 Agent</a>
+    <a class="nav navlink" href="video.html"><span class="ic">🎬</span>短视频制作 Agent</a>
+    <a class="nav navlink" href="distribute.html"><span class="ic">📤</span>短视频分发 Agent</a>
+    <div class="foot">演示原型 v0.1<br>数据为 Mock，仅展示交互<br>合规审查贯穿全流程</div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <h1 id="ttl">发起营销任务</h1>
+        <div class="crumb" id="crumb">选择推广产品并启动多 Agent 流水线</div>
+      </div>
+      <div id="topActions"></div>
+    </div>
+    <div class="content">
+
+      <!-- PAGE: CREATE -->
+      <section class="page show" id="page-create">
+        <div class="card" style="max-width:980px">
+          <div class="banner" style="background:rgba(79,124,255,.08);border-color:rgba(79,124,255,.32);color:#bcd0ff">🔒 本页为<b>只读汇总</b>：以下各步骤（产品 / 医生 / 人群 / 话术）均由对应 Agent 决策生成，此处仅作确认展示，<b>不可在此修改</b>。如需调整，请进入对应 Agent 管理界面。确认无误后点击底部「发起任务，启动流水线」。</div>
+          <!-- ① 选品 -->
+          <div class="cstep">
+            <div class="chead">
+              <div class="sectitle" style="margin:0">① 选择推广产品（选品 Agent · 已规避高风险品类）</div>
+              <a class="agentlink" href="product.html">🛒 进入选品 Agent 管理界面修改 →</a>
+            </div>
+            <div class="prodgrid" id="prodGrid"></div>
+            <div class="grid2" style="margin-top:14px">
+              <div class="field"><label>核心卖点（选品 Agent 决策）</label><div class="rofield" id="fSell"></div></div>
+              <div class="field"><label>合规宣称口径（受控，不可越界）</label><div class="rofield" id="fClaim"></div></div>
+            </div>
+            <div class="grid2">
+              <div class="field"><label>目标投放平台</label><div class="rofield" id="fPlat">抖音 + 微信视频号</div></div>
+              <div class="field"><label>营销目标</label><div class="rofield" id="fGoal">种草拉新（认知+兴趣）</div></div>
+            </div>
+          </div>
+
+          <!-- ② 选医生（随产品联动） -->
+          <div class="cstep">
+            <div class="chead">
+              <div class="sectitle" style="margin:0">② 选定带货医生（随产品联动 · 不同产品对应不同医生池）</div>
+              <a class="agentlink" href="doctor.html">🩺 进入选医生 Agent 管理界面修改 →</a>
+            </div>
+            <div class="linkhint" id="docLink"></div>
+            <div class="strats" id="cStrats"></div>
+            <div id="cDocList"></div>
+          </div>
+
+          <!-- ③ 目标人群 -->
+          <div class="cstep">
+            <div class="chead">
+              <div class="sectitle" style="margin:0">③ 目标人群（基于产品 + 选定医生粉丝画像推导）</div>
+              <a class="agentlink" href="audience.html">🎯 进入人群 Agent 管理界面修改 →</a>
+            </div>
+            <div id="cAud"></div>
+          </div>
+
+          <!-- ④ 话术 -->
+          <div class="cstep">
+            <div class="chead">
+              <div class="sectitle" style="margin:0">④ 营销话术方向（合规审查贯穿，生成时强制过审）</div>
+              <a class="agentlink" href="script.html">✍️ 进入话术 Agent 管理界面修改 →</a>
+            </div>
+            <div class="strats" id="cScript"></div>
+          </div>
+
+          <!-- 汇总 -->
+          <div class="cstep">
+            <div class="sectitle">⑤ 营销任务配置汇总（确认后启动流水线）</div>
+            <div class="summary" id="cSummary"></div>
+          </div>
+
+          <button class="btn primary" id="startBtn">▶ 发起任务，启动流水线</button>
+        </div>
+      </section>
+
+      <!-- PAGE: WORKSTATION -->
+      <section class="page" id="page-ws">
+        <div class="stepbar" id="stepbar"></div>
+        <div class="ws">
+          <!-- left: pipeline -->
+          <div class="pane">
+            <div class="pane-h">流水线 <span class="sub" id="flowSub">等待启动</span></div>
+            <div class="flow" id="flow"></div>
+            <div class="logwrap log" id="logwrap"></div>
+          </div>
+          <!-- right: detail -->
+          <div class="pane">
+            <div class="tabs" id="tabs"></div>
+            <div class="detail" id="detail">
+              <div class="empty"><div class="big">⛓</div>启动任务后，各 Agent 产出会在此展示</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE: RESOURCES -->
+      <section class="page" id="page-res">
+        <div class="card">
+          <div class="sectitle">签约医生库（种子数据 · 节选）</div>
+          <div id="resDoc"></div>
+        </div>
+      </section>
+
+      <!-- PAGE: LIST -->
+      <section class="page" id="page-list">
+        <div class="card">
+          <div class="sectitle">历史任务</div>
+          <div id="taskList" style="color:var(--txt3);font-size:13px;padding:8px 0"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- MODAL -->
+<div class="mask" id="mask">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+/* ============ MOCK DATA ============ */
+const PRODUCTS=[
+  {id:'p1',emoji:'🦠',name:'活性益生菌',cat:'保健食品',desc:'调节肠道菌群，孕妇儿童可用',risk:'普通保健品',domain:'肠道 / 消化健康',dept:'消化内科 / 营养科',aud:'25-45 岁女性 · 母婴/健康养生',sell:'调节肠道菌群，每条含 200 亿活性益生菌，孕妇儿童可用',claim:'仅可宣称"有助于维持肠道菌群平衡"；不得宣称治疗便秘/腹泻等疗效'},
+  {id:'p2',emoji:'👁',name:'叶黄素护眼软糖',cat:'普通食品',desc:'缓解用眼疲劳人群的日常补充',risk:'普通食品·低风险',domain:'护眼 / 视疲劳缓解',dept:'眼科 / 视光科',aud:'学生家长 / 久视屏白领 / 中老年',sell:'每粒含叶黄素酯 + 玉米黄质，咀嚼软糖更易坚持，适合用眼多的人群日常补充',claim:'仅可宣称"有助于缓解视疲劳"等普通食品口径；不得宣称防治近视/治疗眼病'},
+  {id:'p3',emoji:'🦷',name:'益生菌牙膏',cat:'日化',desc:'口腔护理，清新口气',risk:'日化·低风险',domain:'口腔护理 / 清新口气',dept:'口腔科 / 牙周科',aud:'注重口腔健康的全家人群',sell:'益生菌配方温和洁净，帮助维护口腔菌群环境，清新口气',claim:'按日化口径宣称清洁/清新；不得宣称治疗牙周炎/口腔疾病'},
+];
+/* 医生 5 维评分 v=[垂类匹配, 人群重合, 合规历史, 商业转化, 风格契合] */
+const DIMS=['垂类匹配','人群重合','合规历史','商业转化','风格契合'];
+/* 按产品分池：不同产品 → 不同对口科室的待选医生名单 */
+const DOCTORS_BY_PRODUCT={
+  p1:[
+    {id:'d1',emoji:'👩‍⚕️',name:'李静 主任医师',dept:'消化内科',fans:'128w',style:'全能均衡型',tags:['肠道健康','母婴科普','均衡之选'],comp:'良好·无违规',v:[86,88,76,76,86],why:'专长「肠道菌群/消化健康」，与产品功效高度契合；粉丝以 25-45 岁女性为主，人群重合度高；五维均衡、无明显短板。'},
+    {id:'d2',emoji:'👨‍⚕️',name:'王浩 副主任医师',dept:'营养科',fans:'76w',style:'数据派·严谨',tags:['营养科普','保健食品','严谨'],comp:'良好·无违规',v:[80,73,86,72,75],why:'营养学专业背书强，内容严谨可信，适合知识科普向表达。'},
+    {id:'d3',emoji:'🧑‍⚕️',name:'赵敏 主任医师',dept:'消化内科',fans:'210w',style:'高流量·带货型',tags:['高流量','带货转化','消化科普'],comp:'一般·1条提醒',v:[76,90,56,99,68],why:'头部流量 + 带货转化能力突出，人群触达最广；但合规历史有 1 条提醒，需加强审核。'},
+    {id:'d4',emoji:'👩‍⚕️',name:'林芳 主治医师',dept:'消化内科',fans:'92w',style:'垂类内容标杆',tags:['垂类标杆','深度科普','风格契合'],comp:'良好·无违规',v:[97,74,74,58,96],why:'内容垂直度与口播风格最贴合产品，深度科普见长，适合内容种草。'},
+    {id:'d5',emoji:'👨‍⚕️',name:'孙凯 主治医师',dept:'全科',fans:'58w',style:'零违规·合规标杆',tags:['零违规','合规标杆','通俗'],comp:'良好·零违规',v:[70,72,99,52,76],why:'合规记录最优、零违规，资质审核风险最低，适合强合规要求场景。'},
+  ],
+  p2:[
+    {id:'e1',emoji:'👨‍⚕️',name:'陈明 主任医师',dept:'眼科',fans:'135w',style:'全能均衡型',tags:['护眼科普','视疲劳','均衡之选'],comp:'良好·无违规',v:[88,86,80,74,84],why:'眼科权威 + 护眼科普高度对口，粉丝覆盖学生家长与白领；五维均衡，背书与人群双优。'},
+    {id:'e2',emoji:'👩‍⚕️',name:'吴楠 副主任医师',dept:'视光科',fans:'68w',style:'数据派·严谨',tags:['视光科普','用眼健康','严谨'],comp:'良好·无违规',v:[82,74,88,70,76],why:'视光专业，擅长用数据讲清用眼健康，内容严谨可信，合规记录优良。'},
+    {id:'e3',emoji:'🧑‍⚕️',name:'高峰 主任医师',dept:'眼科',fans:'196w',style:'高流量·带货型',tags:['高流量','带货转化','护眼'],comp:'一般·1条提醒',v:[78,92,58,98,70],why:'头部眼科流量 + 带货能力强，触达最广；合规历史有 1 条提醒，需加强审核。'},
+    {id:'e4',emoji:'👩‍⚕️',name:'周琳 主治医师',dept:'眼科',fans:'90w',style:'垂类内容标杆',tags:['儿童近视','深度科普','风格契合'],comp:'良好·无违规',v:[96,76,76,60,95],why:'专注青少年用眼与护眼科普，内容垂直度与口播风格最贴合产品，适合家长人群种草。'},
+    {id:'e5',emoji:'👨‍⚕️',name:'郑伟 主治医师',dept:'眼科',fans:'55w',style:'零违规·合规标杆',tags:['零违规','合规标杆','通俗'],comp:'良好·零违规',v:[72,70,99,54,75],why:'合规记录最优、零违规，资质审核风险最低，适合强合规要求场景。'},
+  ],
+  p3:[
+    {id:'t1',emoji:'👩‍⚕️',name:'何洁 主任医师',dept:'口腔科',fans:'112w',style:'全能均衡型',tags:['口腔护理','日常科普','均衡之选'],comp:'良好·无违规',v:[87,85,82,75,85],why:'口腔科权威，口腔护理科普高度对口，粉丝覆盖注重口腔健康的全家人群；五维均衡。'},
+    {id:'t2',emoji:'👨‍⚕️',name:'罗强 副主任医师',dept:'牙周科',fans:'70w',style:'数据派·严谨',tags:['牙周护理','口腔菌群','严谨'],comp:'良好·无违规',v:[81,72,88,71,74],why:'牙周专业，擅长讲解口腔菌群与日常护理，内容严谨可信，合规优良。'},
+    {id:'t3',emoji:'🧑‍⚕️',name:'马俊 主任医师',dept:'口腔修复科',fans:'188w',style:'高流量·带货型',tags:['高流量','带货转化','口腔'],comp:'一般·1条提醒',v:[77,90,57,97,69],why:'头部口腔流量 + 带货能力强，触达最广；合规历史有 1 条提醒，需加强审核。'},
+    {id:'t4',emoji:'👩‍⚕️',name:'田甜 主治医师',dept:'儿童口腔科',fans:'86w',style:'垂类内容标杆',tags:['儿童口腔','深度科普','风格契合'],comp:'良好·无违规',v:[95,77,75,59,96],why:'专注儿童与家庭口腔护理，内容垂直度与口播风格最贴合产品，适合母婴/家庭种草。'},
+    {id:'t5',emoji:'👨‍⚕️',name:'范磊 主治医师',dept:'口腔全科',fans:'52w',style:'零违规·合规标杆',tags:['零违规','合规标杆','通俗'],comp:'良好·零违规',v:[71,71,99,53,77],why:'合规记录最优、零违规，资质审核风险最低，适合强合规要求场景。'},
+  ],
+};
+const ALL_DOCTORS=Object.values(DOCTORS_BY_PRODUCT).flat();
+function getDoctors(){ return DOCTORS_BY_PRODUCT[state.prod||selProd]||DOCTORS_BY_PRODUCT.p1; }
+/* 精排策略权重，和为 1 */
+const STRATS={
+  balanced:{name:'均衡',sub:'多目标平衡',w:[.25,.20,.25,.15,.15]},
+  content :{name:'内容优先',sub:'垂类+风格',w:[.40,.15,.20,.05,.20]},
+  conv    :{name:'转化优先',sub:'带货+人群',w:[.15,.25,.15,.35,.10]},
+  comp    :{name:'合规优先',sub:'资质安全第一',w:[.20,.15,.45,.10,.10]},
+};
+function scoreDoc(d,w){return Math.round(d.v.reduce((s,x,i)=>s+x*w[i],0));}
+function rankDoctors(stratKey){const w=STRATS[stratKey].w;return getDoctors().map(d=>({...d,s:scoreDoc(d,w)})).sort((a,b)=>b.s-a.s);}
+const AUDIENCE=[
+  {k:'25-45岁 女性',v:78},{k:'一二线城市',v:65},{k:'母婴/育儿兴趣',v:71},
+  {k:'健康养生关注',v:69},{k:'近期搜索肠道/消化',v:54},
+];
+const STORYBOARD=[
+  {sc:'1',sec:'0-3s',shot:'医生正面口播·特写',line:'你是不是经常觉得肚子胀、不舒服？',cap:'肠道也需要养护'},
+  {sc:'2',sec:'3-10s',shot:'产品展示+动画',line:'我们的肠道里住着上万亿的菌群，平衡很重要。',cap:'维持菌群平衡'},
+  {sc:'3',sec:'10-18s',shot:'医生讲解+成分图',line:'日常可以补充活性益生菌，帮助维持肠道菌群平衡。',cap:'200亿活性益生菌'},
+  {sc:'4',sec:'18-22s',shot:'品牌出镜+引导',line:'科学养护，从日常做起。',cap:'点击了解更多'},
+];
+
+/* ============ PIPELINE DEFINITION ============ */
+const NODES=[
+  {id:'doctor', n:'①',ic:'🩺',name:'选医生 Agent',desc:'召回 + 向量匹配 + LLM 精排'},
+  {id:'audience',n:'②',ic:'🎯',name:'目标人群 Agent',desc:'画像生成 + 平台标签映射'},
+  {id:'script', n:'③',ic:'✍️',name:'话术 Agent',desc:'RAG 检索 + 分人群生成'},
+  {id:'comp1',  n:'⑤',ic:'🛡',name:'合规审查（话术）',desc:'违禁词 + LLM 语义审核'},
+  {id:'video',  n:'④',ic:'🎬',name:'短视频 Agent',desc:'脚本 → 分镜 → TTS → 合成'},
+  {id:'comp2',  n:'⑤',ic:'🛡',name:'合规审查（成片）',desc:'多模态审核 + 人工终审'},
+  {id:'publish',n:'▶',ic:'📤',name:'分发（Mock）',desc:'多平台发布 + 数据回流'},
+];
+const STEPS=['选医生','人群','话术','合规','视频','终审','发布'];
+
+let state={}, logTimer=null;
+
+/* ============ NAV ============ */
+document.querySelectorAll('.nav[data-page]').forEach(n=>n.onclick=()=>showPage(n.dataset.page));
+function showPage(p){
+  document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.page===p));
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('show'));
+  document.getElementById('page-'+p).classList.add('show');
+  const titles={create:['发起营销任务','选择推广产品并启动多 Agent 流水线'],ws:['流水线工作台','多 Agent 协同实时执行 · 含人审关卡'],res:['资源库','种子数据管理'],list:['任务列表','历史营销任务']};
+  document.getElementById('ttl').textContent=titles[p][0];
+  document.getElementById('crumb').textContent=titles[p][1];
+  document.getElementById('topActions').innerHTML = p==='ws'
+    ? '<span class="modetag dry" id="modetag" style="display:none"></span>'
+      +'<button class="btn ghost sm" onclick="startRun(\'dry\')">🔍 预跑</button>'
+      +'<button class="btn primary sm" onclick="startRun(\'exe\')">🚀 执行</button>'
+      +'<button class="btn ghost sm" onclick="resetRun()">↻ 重置</button>'
+    : '';
+  if(p==='list' && typeof renderTaskList==='function') renderTaskList();
+}
+
+/* ============ CREATE PAGE ============ */
+let selProd='p1';
+const SCRIPTS={
+  edu  :{name:'科普向',sub:'专业知识讲解'},
+  trust:{name:'信任背书向',sub:'医生权威+成分'},
+  conv :{name:'促转化向',sub:'利益点+行动召唤'},
+};
+let launchCfg={prod:'p1',doctorId:null,docStrat:'balanced',scriptStrat:'edu'};
+
+function rankCreateDoctors(){const w=STRATS[launchCfg.docStrat].w;return DOCTORS_BY_PRODUCT[selProd].map(d=>({...d,s:scoreDoc(d,w)})).sort((a,b)=>b.s-a.s);}
+function renderProds(){
+  document.getElementById('prodGrid').innerHTML=PRODUCTS.map(p=>`
+    <div class="prod ro ${p.id===selProd?'sel':'dim'}">
+      <div class="emoji">${p.emoji}</div><h4>${p.name}${p.id===selProd?' <span class="chip g">✓ 已选定</span>':''}</h4><p>${p.desc}</p>
+      <span class="tag">✓ ${p.risk}</span>
+    </div>`).join('');
+}
+function onPickProd(id){
+  selProd=id; launchCfg.prod=id;
+  const p=PRODUCTS.find(x=>x.id===id);
+  document.getElementById('fSell').textContent=p.sell;
+  document.getElementById('fClaim').textContent=p.claim;
+  launchCfg.doctorId=rankCreateDoctors()[0].id;   /* 选品联动：自动切到该产品策略 Top 医生 */
+  renderProds();renderCStrats();renderCDocs();renderCAud();renderSummary();
+}
+function renderCStrats(){
+  document.getElementById('cStrats').innerHTML=Object.entries(STRATS).map(([k,t])=>`<div class="strat ro ${k===launchCfg.docStrat?'sel':'dim'}"><b>${t.name}</b><span>${t.sub}</span></div>`).join('');
+}
+function onCStrat(k){launchCfg.docStrat=k;launchCfg.doctorId=rankCreateDoctors()[0].id;renderCStrats();renderCDocs();renderCAud();renderSummary();}
+function renderCDocs(){
+  const p=PRODUCTS.find(x=>x.id===selProd);
+  document.getElementById('docLink').innerHTML=`🔗 当前产品【<b>${p.name}</b>】功效域：${p.domain} → 对口 <b>${p.dept}</b> 医生池（${DOCTORS_BY_PRODUCT[selProd].length} 位）。带货医生由选医生 Agent 按「${STRATS[launchCfg.docStrat].name}」策略决策选定。`;
+  const ranked=rankCreateDoctors();
+  const d=ranked.find(x=>x.id===launchCfg.doctorId)||ranked[0];
+  const i=ranked.findIndex(x=>x.id===d.id);
+  document.getElementById('cDocList').innerHTML=`
+    <div class="minidoc sel ro">
+      <div class="av">${d.emoji}</div>
+      <div class="mi"><h4>${d.name} <span class="chip g">✓ 已选定</span>${i===0?'<span class="chip b">策略推荐</span>':''}${d.comp.startsWith('良好')?'':'<span class="chip" style="background:rgba(240,169,59,.16);color:var(--warn)">合规提醒</span>'}</h4>
+        <div class="meta">${d.dept} · 粉丝 ${d.fans} · ${d.style} · ${d.tags[0]}</div></div>
+      <div class="msc"><div class="n">${d.s}</div><div class="l">${STRATS[launchCfg.docStrat].name}分</div></div>
+    </div>`;
+}
+function onPickDoc(id){launchCfg.doctorId=id;renderCDocs();renderCAud();renderSummary();}
+function renderCAud(){
+  const p=PRODUCTS.find(x=>x.id===selProd);
+  const doc=DOCTORS_BY_PRODUCT[selProd].find(d=>d.id===launchCfg.doctorId);
+  document.getElementById('cAud').innerHTML=`<div class="linkhint" style="color:#bcd0ff;background:rgba(79,124,255,.08);border-color:rgba(79,124,255,.28)">🎯 目标人群：<b>${p.aud}</b>；以 <b>${doc?doc.name:'—'}</b> 的粉丝画像为种子，Lookalike 放大 → 预估可触达 <b>52.6 万</b>（巨量 DMP · Mock）。</div>`;
+}
+function renderCScript(){
+  document.getElementById('cScript').innerHTML=Object.entries(SCRIPTS).map(([k,t])=>`<div class="strat ro ${k===launchCfg.scriptStrat?'sel':'dim'}"><b>${t.name}</b><span>${t.sub}</span></div>`).join('');
+}
+function onCScript(k){launchCfg.scriptStrat=k;renderCScript();renderSummary();}
+function renderSummary(){
+  const p=PRODUCTS.find(x=>x.id===selProd);
+  const doc=DOCTORS_BY_PRODUCT[selProd].find(d=>d.id===launchCfg.doctorId)||rankCreateDoctors()[0];
+  const dscore=scoreDoc(doc,STRATS[launchCfg.docStrat].w);
+  const plat=document.getElementById('fPlat'), goal=document.getElementById('fGoal');
+  document.getElementById('cSummary').innerHTML=`
+    <div class="srow"><div class="sk">🛒 推广产品</div><div class="sv"><b>${p.emoji} ${p.name}</b> · ${p.cat} · ${p.domain} <span class="subtle">（${p.risk}）</span></div></div>
+    <div class="srow"><div class="sk">🩺 带货医生</div><div class="sv"><b>${doc.name}</b> · ${doc.dept} · 粉丝 ${doc.fans} <span class="subtle">（${STRATS[launchCfg.docStrat].name}策略 · ${dscore}分）</span></div></div>
+    <div class="srow"><div class="sk">🎯 目标人群</div><div class="sv">${p.aud} · Mock 人群包 <b>52.6 万</b></div></div>
+    <div class="srow"><div class="sk">✍️ 营销话术</div><div class="sv"><b>${SCRIPTS[launchCfg.scriptStrat].name}</b> · ${SCRIPTS[launchCfg.scriptStrat].sub} <span class="subtle">（生成时合规审查强制过审）</span></div></div>
+    <div class="srow"><div class="sk">📤 分发投放</div><div class="sv">${plat?plat.textContent:'抖音 + 微信视频号'} · 目标：${goal?goal.textContent:'种草拉新'} · 定向至人群包</div></div>`;
+}
+function renderCreate(){renderProds();renderCStrats();renderCDocs();renderCAud();renderCScript();renderSummary();}
+onPickProd('p1');renderCScript();
+document.getElementById('startBtn').onclick=()=>{ showPage('ws'); startRun('exe',{...launchCfg}); };
+
+/* ============ RESOURCES ============ */
+document.getElementById('resDoc').innerHTML=PRODUCTS.map(p=>`
+  <div style="margin-bottom:6px;color:var(--txt2);font-size:12.5px">${p.emoji} <b>${p.name}</b> · 对口 ${p.dept} <span class="chip b">联动医生池 ${DOCTORS_BY_PRODUCT[p.id].length} 位</span></div>
+  ${DOCTORS_BY_PRODUCT[p.id].map(d=>`
+   <div class="doc"><div class="av">${d.emoji}</div>
+    <div class="info"><h4>${d.name}</h4>
+      <div class="meta">${d.dept} · 粉丝 ${d.fans} · ${d.style||''}</div>
+      ${(d.tags||[]).map(t=>`<span class="chip b">${t}</span>`).join('')}
+    </div></div>`).join('')}
+  <div style="height:14px"></div>`).join('');
+/* ============ 历史任务列表（短视频分发完成后归档） ============ */
+function fmtTime(ts){
+  if(!ts) return '—';
+  const d=new Date(ts), p=n=>(n<10?'0':'')+n;
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function getTaskHistory(){
+  let list=[]; try{list=JSON.parse(localStorage.getItem('sv_task_history')||'[]');}catch(e){}
+  return Array.isArray(list)?list:[];
+}
+function renderTaskList(){
+  const box=document.getElementById('taskList');
+  const list=getTaskHistory();
+  if(!list.length){
+    box.innerHTML='<div style="color:var(--txt3);font-size:13px;padding:8px 0">暂无历史任务。请在「流程视图」中走完整条 Agent 链路（至短视频分发），完成后将自动归档为一条历史任务。</div>';
+    return;
+  }
+  box.innerHTML=
+    `<div class="histbar"><div style="font-size:12px;color:var(--txt2)">共 <b>${list.length}</b> 条历史任务 · 点击任意任务进入工作流（默认从首个节点起，可重新编辑）</div>`
+    +`<div class="hb-clear" onclick="clearTaskHistory()">🗑 清空历史</div></div>`
+    +list.map(t=>`
+      <div class="histcard" onclick="openTask('${t.id}')">
+        <div class="hc-ic">${t.productEmoji||'🛒'}</div>
+        <div class="hc-main">
+          <h4>${t.product||'—'} <span class="chip b">${t.doctorEmoji||'👩‍⚕️'} ${t.doctor||'—'}</span></h4>
+          <div class="hc-meta">🎯 ${t.audienceTier||'—'} · 主力年龄 ${t.mainAge||'—'} · 触达 ${t.reach||'—'} ｜ ✍️ ${t.seg||'—'} ｜ 📤 ${t.platforms||'—'}</div>
+          <div class="hc-time">归档于 ${fmtTime(t.ts)}</div>
+        </div>
+        <div class="hc-go">进入工作流 →</div>
+      </div>`).join('');
+}
+function openTask(id){
+  const list=getTaskHistory();
+  const t=list.find(x=>x.id===id);
+  if(!t){ renderTaskList(); return; }
+  /* 还原整条链路快照到 live localStorage，使各 Agent 子页恢复完成态、可编辑 */
+  const keys=['sv_selected_product','sv_selected_doctor','sv_selected_audience','sv_selected_script','sv_selected_video','sv_distribute_done'];
+  const snap=t.snapshot||{};
+  keys.forEach(k=>{
+    const v=snap[k];
+    try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,v); }catch(e){}
+  });
+  /* 进入流程视图外壳，默认从首个节点起 */
+  location.href='app.html';
+}
+function clearTaskHistory(){
+  try{localStorage.removeItem('sv_task_history');}catch(e){}
+  renderTaskList();
+}
+renderTaskList();
+
+/* ============ WORKSTATION RENDER ============ */
+function renderStepbar(){
+  document.getElementById('stepbar').innerHTML=STEPS.map((s,i)=>{
+    let cls=''; if(state.stepStatus){cls=state.stepStatus[i]||'';}
+    return `<div class="step ${cls}"><div class="n">${i+1}</div>${s}</div>`;
+  }).join('');
+}
+function renderFlow(){
+  let html='';
+  const savedMap={doctor:state.saved&&state.saved.doctor,audience:state.saved&&state.saved.audience,script:state.saved&&state.saved.script};
+  NODES.forEach((nd,i)=>{
+    const st=state.node?.[nd.id]||'idle';
+    const statTxt={idle:'待处理',run:'<span class="spin"></span> 执行中',done:'✓ 完成',fail:'✕ 打回',gate:'⏸ 待确认'}[st];
+    const cls=st==='idle'?'':st;
+    const arch=savedMap[nd.id]?'<span class="arch">📎 已存档</span>':'';
+    html+=`<div class="node ${cls}" onclick="selectTab('${nd.id}')">
+      <div class="row"><div class="badge">${nd.ic}</div>
+        <div><h4>${nd.n} ${nd.name}</h4><div class="desc">${nd.desc}</div></div>
+        <div class="stat">${statTxt}</div></div>${arch}</div>`;
+    if(i<NODES.length-1){
+      if(nd.id==='comp1') html+=`<div class="arrow">↓ <span style="color:var(--ok)">通过</span> / <span style="color:var(--err)">不过→打回③</span></div>`;
+      else html+=`<div class="arrow">↓</div>`;
+    }
+  });
+  document.getElementById('flow').innerHTML=html;
+}
+function renderTabs(){
+  const tabsDef=[['doctor','选医生'],['audience','人群'],['script','话术'],['comp1','合规'],['video','视频'],['publish','发布']];
+  document.getElementById('tabs').innerHTML=tabsDef.map(([id,t])=>{
+    const has=state.output&&state.output[id];
+    return `<div class="tab ${state.activeTab===id?'active':''}" onclick="selectTab('${id}')">${t}${has?'<span class="pdot"></span>':''}</div>`;
+  }).join('');
+}
+function selectTab(id){
+  const map={comp2:'comp1'};id=map[id]||id;
+  state.activeTab=id; renderTabs(); renderDetail();
+}
+
+/* ============ DETAIL PANELS ============ */
+function renderDetail(){
+  const id=state.activeTab, out=state.output||{};
+  const box=document.getElementById('detail');
+  if(!out[id]){ box.innerHTML=`<div class="empty"><div class="big">⏳</div>该环节尚未产出，或正在执行…</div>`; return; }
+  box.innerHTML=({
+    doctor:detDoctor, audience:detAudience, script:detScript,
+    comp1:detComp, video:detVideo, publish:detPublish
+  }[id])();
+}
+function setDocStrat(k){state.docStrat=k;const r=rankDoctors(k);state.selDoctor=r[0].id;renderDetail();}
+function pickDoctor(id){state.selDoctor=id;renderDetail();}
+function saveDoctor(){
+  const d=getDoctors().find(x=>x.id===state.selDoctor); if(!d)return;
+  const strat=state.docStrat||'balanced';
+  state.saved.doctor={id:d.id,name:d.name,strat,score:scoreDoc(d,STRATS[strat].w)};
+  log('选医生Agent','结果已保存并关联流水线：'+d.name+'（'+STRATS[strat].name+'策略）','ok');
+  renderDetail();renderFlow();
+}
+function detDoctor(){
+  const strat=state.docStrat||'balanced', w=STRATS[strat].w, ranked=rankDoctors(strat), sd=state.saved&&state.saved.doctor;
+  return `<div class="sectitle">精排策略（不同诉求 → 不同推荐）</div>
+   <div class="strats">${Object.entries(STRATS).map(([k,t])=>`<div class="strat ${k===strat?'sel':''}" onclick="setDocStrat('${k}')"><b>${t.name}</b><span>${t.sub}</span></div>`).join('')}</div>
+   <div class="wrow">权重 → ${DIMS.map((d,i)=>`<span class="wi">${d} <b>${Math.round(w[i]*100)}%</b></span>`).join('')}</div>
+   <div class="sectitle">候选医生排序 · 加权总分</div>`+
+   ranked.map((d,i)=>`<div class="doc ${state.selDoctor===d.id?'sel':''} ${i===0?'top':''}">
+     <div class="rk">${i+1}</div>
+     <div class="av">${d.emoji}</div>
+     <div class="info"><h4>${d.name} ${state.selDoctor===d.id?'<span class="chip g">已选定</span>':''} ${d.comp.startsWith('良好')?'':'<span class="chip" style="background:rgba(240,169,59,.16);color:var(--warn)">合规提醒</span>'}</h4>
+       <div class="meta">${d.dept} · 粉丝 ${d.fans} · ${d.style}</div>
+       ${(d.tags||[]).map(t=>`<span class="chip b">${t}</span>`).join('')}
+       <div class="why">💡 ${d.why}<br><span style="color:var(--txt3)">最强项：<b style="color:#9db8ff">${DIMS[d.v.indexOf(Math.max(...d.v))]} ${Math.max(...d.v)}</b></span></div>
+       ${state.selDoctor!==d.id?`<button class="btn ghost sm" style="margin-top:8px" onclick="pickDoctor('${d.id}')">选定 TA</button>`:''}
+     </div>
+     <div class="score"><div class="num">${d.s}</div><div class="lbl">${STRATS[strat].name}分</div></div>
+   </div>`).join('')+
+   `<div class="saverow">
+     ${sd?`<span class="saved-tag">📎 已保存：<b>${sd.name}</b>（${STRATS[sd.strat].name}策略 · ${sd.score}分）已写入任务档案</span>`
+        :`<span style="font-size:11.5px;color:var(--txt3)">保存后将作为本次流水线选定医生，向下游传递</span>`}
+     <button class="btn ${sd&&sd.id===state.selDoctor?'ghost':'primary'} sm" style="margin-left:auto" onclick="saveDoctor()">💾 ${sd?'更新保存':'保存并关联流水线'}</button>
+   </div>`;
+}
+function saveAudience(){state.saved.audience={size:'52.6 万',from:state.saved.doctor?.name};log('人群Agent','人群包结果已保存并关联流水线（52.6w）','ok');renderDetail();renderFlow();}
+function detAudience(){
+  const sd=state.saved&&state.saved.doctor, sa=state.saved&&state.saved.audience;
+  return `${sd?`<div class="banner" style="background:rgba(79,124,255,.08);border-color:rgba(79,124,255,.3);color:#bcd0ff">🔗 基于已选定医生 <b>${sd.name}</b> 的粉丝画像推导目标人群</div>`:''}
+   <div class="sectitle">目标人群画像（LLM 推导）</div>
+   <div class="bars">${AUDIENCE.map(a=>`<div class="bar"><div class="t"><span>${a.k}</span><span>${a.v}%</span></div><div class="track"><div class="fill" style="width:${a.v}%"></div></div></div>`).join('')}</div>
+   <div class="sectitle" style="margin-top:14px">平台标签映射</div>
+   <div>${['抖音:女性|25-45|母婴','抖音:健康养生','微信:育儿兴趣','莱卡定向:消化健康'].map(t=>`<span class="chip">${t}</span>`).join('')}</div>
+   <div class="pkg"><div style="font-size:12px;color:var(--txt2)">📦 模拟人群包（巨量 DMP · Mock）</div>
+     <div class="num">52.6 万</div><div style="font-size:11px;color:var(--txt3)">种子人群上传 + Lookalike 放大 ·  预估可触达</div></div>
+   <div class="saverow">
+     ${sa?`<span class="saved-tag">📎 人群包已保存并写入任务档案（52.6 万）</span>`:`<span style="font-size:11.5px;color:var(--txt3)">保存后人群包将关联到话术生成与分发投放</span>`}
+     <button class="btn ${sa?'ghost':'primary'} sm" style="margin-left:auto" onclick="saveAudience()">💾 ${sa?'更新保存':'保存并关联流水线'}</button>
+   </div>`;
+}
+function saveScript(){state.saved.script={ver:'v2',count:2};log('话术Agent','合规话术 v2（2 套）已保存并关联流水线','ok');renderDetail();renderFlow();}
+function detScript(){
+  const v=state.scriptVersion||1;
+  if(v===1) return `<div class="banner">⚠ 第 1 版含违规表述，已被合规 Agent 打回（见下方高亮）</div>
+   <div class="scriptbox"><h4>话术 v1 · 面向「肠道健康关注女性」<span class="chip" style="color:var(--err)">已打回</span></h4>
+   <p>姐妹们！这款益生菌<span class="hl">能彻底治好你的便秘</span>，我作为医生<span class="hl">强烈推荐</span>，效果<span class="hl">堪称最好</span>，吃了<span class="hl">三天就根治</span>肠道问题！</p></div>
+   <div style="text-align:center;color:var(--txt3);font-size:12px">↓ 合规 Agent 自动打回，话术 Agent 重写中…</div>`;
+  const ss=state.saved&&state.saved.script;
+  return `<div class="banner" style="background:rgba(34,192,139,.1);border-color:rgba(34,192,139,.35);color:var(--ok)">✓ 第 2 版已通过合规审查，违规表述已规避</div>
+   <div class="scriptbox"><h4>话术 v2 · 面向「肠道健康关注女性」<span class="chip g">合规通过</span></h4>
+   <p>很多朋友会关注肠道健康。我们的肠道里有大量菌群，<span class="hlk">维持菌群平衡</span>对日常状态很重要。日常可以适当补充<span class="hlk">活性益生菌</span>，帮助维持肠道菌群平衡。科学养护，从日常做起。</p></div>
+   <div class="scriptbox"><h4>话术 v2 · 面向「母婴/育儿人群」<span class="chip g">合规通过</span></h4>
+   <p>当妈以后更注重全家的肠道健康。这款益生菌<span class="hlk">孕妇和儿童也可以用</span>，每条含 200 亿活性益生菌，帮助<span class="hlk">维持肠道菌群平衡</span>，口味温和不刺激。</p></div>
+   <div class="saverow">
+     ${ss?`<span class="saved-tag">📎 合规话术 v2（2 套）已保存并写入任务档案</span>`:`<span style="font-size:11.5px;color:var(--txt3)">保存后将作为短视频脚本与分发的话术来源</span>`}
+     <button class="btn ${ss?'ghost':'primary'} sm" style="margin-left:auto" onclick="saveScript()">💾 ${ss?'更新保存':'保存并关联流水线'}</button>
+   </div>`;
+}
+function detComp(){
+  const v=state.scriptVersion||1;
+  if(state.node?.comp1!=='done') return `<div class="empty"><div class="big">🛡</div>合规审查执行中…</div>`;
+  return `<div class="verdict pass"><span style="font-size:20px">✓</span> 终审通过 · 内容符合《广告法》《互联网广告管理办法》</div>
+   <div class="sectitle">审查明细</div>
+   <div class="crow"><span class="i">🟥</span><div><b>v1 拦截：</b>「彻底治好/根治便秘」— 保健食品不得宣称疗效（违《广告法》§18）</div></div>
+   <div class="crow"><span class="i">🟥</span><div><b>v1 拦截：</b>「我作为医生强烈推荐」— 禁止利用医生作推荐证明（§16/§18）</div></div>
+   <div class="crow"><span class="i">🟥</span><div><b>v1 拦截：</b>「最好/三天」— 绝对化用语 + 功效时限承诺</div></div>
+   <div class="crow"><span class="i">🟩</span><div><b>v2 通过：</b>改为「维持肠道菌群平衡」等合规口径，移除疗效与代言表述</div></div>
+   <div class="crow"><span class="i">🟦</span><div><b>多模态：</b>成片字幕(OCR)+口播(ASR)二次审核通过</div></div>`;
+}
+function detVideo(){
+  return `<div class="sectitle">分镜脚本（LLM 结构化）</div>
+   <table class="sb"><tr><th>镜</th><th>时长</th><th>画面</th><th>口播台词</th><th>字幕</th></tr>
+   ${STORYBOARD.map(s=>`<tr><td>${s.sc}</td><td>${s.sec}</td><td>${s.shot}</td><td>${s.line}</td><td>${s.cap}</td></tr>`).join('')}</table>
+   <div class="sectitle" style="margin-top:14px">TTS 配音（真实可生成）</div>
+   <div class="player"><div class="pbtn">▶</div><div class="wave">${Array.from({length:40}).map(()=>`<i style="height:${20+Math.random()*80}%"></i>`).join('')}</div><span style="font-size:11px;color:var(--txt3)">00:22</span></div>
+   <div class="sectitle">数字人成片（Mock · 可接真实 API）</div>
+   <div class="vidbox"><div class="play">▶</div><div style="font-size:11px;color:var(--txt3)">9:16 竖版 · 22s</div><div class="cap">日常可补充活性益生菌，<br>帮助维持肠道菌群平衡</div></div>`;
+}
+function detPublish(){ return state.mode==='exe'?detPublishLive():detPreflight(); }
+function detPreflight(){
+  const sd=state.saved||{};
+  const items=[
+    sd.doctor ?{ok:1,t:`选医生结果已关联：<b>${sd.doctor.name}</b>（${STRATS[sd.doctor.strat].name}策略 · ${sd.doctor.score}分）`}
+              :{ok:0,t:'选医生结果<b>未保存关联</b>',sub:'下游将回退默认医生，建议回 ①选医生 面板点「保存并关联流水线」'},
+    sd.audience?{ok:1,t:`目标人群包已关联（${sd.audience.size}）`}
+              :{ok:0,t:'人群包<b>未保存关联</b>',sub:'分发定向将缺少人群包，建议回 ②目标人群 面板保存'},
+    sd.script ?{ok:1,t:`合规话术已关联（${sd.script.ver} · ${sd.script.count} 套）`}
+              :{ok:0,t:'话术结果<b>未保存关联</b>',sub:'视频脚本与文案来源缺失，建议回 ③话术 面板保存'},
+    {ok:1,t:'合规审查：话术 v2 + 成片多模态 <b>均已通过</b>'},
+    {ok:1,t:'渠道 API 联调：抖音 / 微信视频号 / 快手 <b>鉴权 + 草稿校验通过</b>',sub:'已创建草稿但未发布（预跑模式）'},
+    {ok:0,t:'投放预算与商品落地页 <b>待配置</b>',sub:'执行前需补充投放预算与落地页链接，否则定向投放无法生效'},
+  ];
+  const warn=items.filter(x=>!x.ok).length;
+  const chans=[['抖音','🎵'],['微信视频号','💬'],['快手','⚡']];
+  return `<div class="sectitle">🔍 预跑自检报告（联调不发布）</div>
+   <div class="banner" style="background:rgba(240,169,59,.08);border-color:rgba(240,169,59,.32);color:#f0c890">本次为 <b>预跑</b>：已完整走通全流程并联调各渠道 API（草稿态），<b>未真正发布</b>。共发现 <b>${warn}</b> 项待完善；调整后点顶部「🚀 执行」正式发布。</div>
+   ${items.map(it=>`<div class="pf ${it.ok?'':'warn'}"><span class="pi">${it.ok?'✓':'⚠'}</span><div><b>${it.t}</b>${it.sub?`<div class="sub">${it.sub}</div>`:''}</div></div>`).join('')}
+   <div class="sectitle" style="margin-top:14px">渠道 API 连通性（Mock 联调）</div>
+   ${chans.map(c=>`<div class="plat"><div class="pl-ic" style="background:#4f7cff22;color:#9db8ff">${c[1]}</div><div><div style="font-size:13px">${c[0]}</div><div style="font-size:11px;color:var(--txt3)">OAuth 鉴权通过 · 草稿创建成功 · 未发布</div></div><span class="stat2" style="color:var(--warn)">● 草稿态</span></div>`).join('')}`;
+}
+function detPublishLive(){
+  const plats=[['抖音','#000','🎵'],['微信视频号','#07c160','💬'],['快手','#ff5000','⚡']];
+  return `<div class="sectitle">分发结果（Mock）</div>
+   ${plats.map(p=>`<div class="plat"><div class="pl-ic" style="background:${p[1]}22;color:${p[1]}">${p[2]}</div><div><div style="font-size:13px">${p[0]}</div><div style="font-size:11px;color:var(--txt3)">已定向投放至 52.6 万人群包</div></div><span class="stat2">✓ 已发布</span></div>`).join('')}
+   <div class="sectitle" style="margin-top:14px">效果数据回流（24h · 模拟）</div>
+   <div class="kpi">
+     <div class="k"><div class="v">18.3w</div><div class="l">曝光</div></div>
+     <div class="k"><div class="v">2.7w</div><div class="l">播放</div></div>
+     <div class="k"><div class="v">6.2%</div><div class="l">互动率</div></div>
+     <div class="k"><div class="v">1,240</div><div class="l">点击</div></div>
+     <div class="k"><div class="v">312</div><div class="l">加购</div></div>
+     <div class="k"><div class="v">4.8★</div><div class="l">医生匹配反馈</div></div>
+   </div>
+   <div class="banner" style="margin-top:14px">数据回流后将反哺 ①选医生/②人群/③话术 的打分模型，形成自优化闭环。</div>`;
+}
+
+/* ============ LOG ============ */
+function log(ag,msg,cls='ok'){
+  const t=new Date().toLocaleTimeString('zh-CN',{hour12:false});
+  const w=document.getElementById('logwrap');
+  w.innerHTML+=`<div><span class="tm">${t}</span> <span class="ag">[${ag}]</span> <span class="${cls}">${msg}</span></div>`;
+  w.scrollTop=w.scrollHeight;
+}
+
+/* ============ RUN SIMULATION ============ */
+let runCfg={prod:'p1',doctorId:null,docStrat:'balanced',scriptStrat:'edu'};
+function resetRun(){ if(logTimer)clearTimeout(logTimer); startRun(state.mode||'dry',runCfg); }
+function updateModeTag(){
+  const el=document.getElementById('modetag'); if(!el)return;
+  if(state.mode==='exe'){el.className='modetag exe';el.textContent='🚀 执行模式 · 正式发布';}
+  else{el.className='modetag dry';el.textContent='🔍 预跑模式 · 联调不发布';}
+  el.style.display='inline-block';
+}
+function startRun(mode,cfg){
+  if(logTimer)clearTimeout(logTimer);
+  mode=mode||'dry';
+  cfg=cfg||runCfg; runCfg=cfg;
+  const prod=cfg.prod||'p1', docs=DOCTORS_BY_PRODUCT[prod]||DOCTORS_BY_PRODUCT.p1;
+  const strat=cfg.docStrat||'balanced';
+  const ranked=docs.map(d=>({...d,s:scoreDoc(d,STRATS[strat].w)})).sort((a,b)=>b.s-a.s);
+  const did=(cfg.doctorId&&docs.find(d=>d.id===cfg.doctorId))?cfg.doctorId:ranked[0].id;
+  const doc=docs.find(d=>d.id===did);
+  const p=PRODUCTS.find(x=>x.id===prod);
+  state={node:{},output:{},stepStatus:[],activeTab:'doctor',prod,selDoctor:did,docStrat:strat,scriptStrat:cfg.scriptStrat||'edu',scriptVersion:1,mode,
+    saved:{ /* 发起页已确认的配置预填入任务档案 */
+      doctor:{id:doc.id,name:doc.name,strat,score:scoreDoc(doc,STRATS[strat].w)},
+      audience:{size:'52.6 万',from:doc.name},
+      script:{ver:'v2',count:2,strat:cfg.scriptStrat||'edu'}
+    }};
+  updateModeTag();
+  document.getElementById('logwrap').innerHTML='';
+  document.getElementById('flowSub').textContent=(mode==='exe'?'执行中（正式发布）…':'预跑中（联调不发布）…');
+  renderStepbar();renderFlow();renderTabs();renderDetail();
+  const seq=[
+    {d:300,fn:()=>{state.node.doctor='run';state.stepStatus[0]='active';log('Orchestrator',`任务创建：${p.name} → 启动流水线（已载入发起页配置）`);log('选医生Agent',`向量召回候选医生… 标签过滤(${p.dept})`,'ag2');}},
+    {d:1100,fn:()=>{log('选医生Agent','LLM 精排完成，候选已生成');state.node.doctor='gate';state.output.doctor=1;state.activeTab='doctor';gateDoctor();}},
+  ];
+  runSeq(seq);
+}
+function runSeq(seq){
+  let i=0;
+  function step(){
+    if(i>=seq.length)return;
+    const s=seq[i++];
+    logTimer=setTimeout(()=>{ s.fn(); renderStepbar();renderFlow();renderTabs();if(['doctor','audience','script','comp1','video','publish'].includes(state.activeTab))renderDetail(); step(); },s.d);
+  }
+  step();
+}
+/* human gate: doctor */
+function gateDoctor(){
+  const strat=state.docStrat||'balanced', ranked=rankDoctors(strat);
+  const top=ranked.find(d=>d.id===state.selDoctor)||ranked[0];
+  state.selDoctor=top.id;
+  renderStepbar();renderFlow();renderTabs();renderDetail();
+  showModal('🩺 人审关卡：确认医生',`发起页已选定 <b>${top.name}</b>（${STRATS[strat].name}策略 · ${strat==='balanced'?'':STRATS[strat].name}分 ${top.s}）。此处为人审复核：可在左侧切换策略 / 更换医生后再确认。`,
+    [{t:'查看/切换候选',c:'ghost',fn:()=>{closeModal();selectTab('doctor');}},
+     {t:'✓ 确认并继续',c:'primary',fn:()=>{closeModal();afterDoctor();}}]);
+}
+function afterDoctor(){
+  const d=getDoctors().find(x=>x.id===state.selDoctor)||getDoctors()[0];
+  state.node.doctor='done';state.stepStatus[0]='done';log('Orchestrator','医生已确认：'+d.name,'ok');
+  renderFlow();renderStepbar();
+  runSeq([
+    {d:200,fn:()=>{state.node.audience='run';state.stepStatus[1]='active';state.activeTab='audience';log('人群Agent','基于产品+医生粉丝画像，生成目标人群…','ag2');}},
+    {d:1200,fn:()=>{state.node.audience='done';state.stepStatus[1]='done';state.output.audience=1;log('人群Agent','人群画像生成，映射平台标签，Mock 人群包 52.6w','ok');}},
+    {d:300,fn:()=>{state.node.script='run';state.stepStatus[2]='active';state.activeTab='script';state.scriptVersion=1;log('话术Agent','RAG 检索合规宣称口径 + 医生风格…','ag2');}},
+    {d:1300,fn:()=>{state.node.script='done';state.output.script=1;log('话术Agent','话术 v1 生成完成','ok');}},
+    {d:300,fn:()=>{state.node.comp1='run';state.stepStatus[3]='active';state.activeTab='comp1';log('合规Agent','审查话术 v1：违禁词规则 + LLM 语义…','ag2');}},
+    {d:1300,fn:()=>{state.node.comp1='fail';state.stepStatus[3]='fail';state.output.comp1=1;log('合规Agent','✕ 拦截：疗效宣称/医生代言/绝对化用语 → 打回话术Agent','er');}},
+    {d:600,fn:()=>{state.node.script='run';state.node.comp1='idle';state.stepStatus[3]='active';state.activeTab='script';state.scriptVersion=2;log('话术Agent','收到打回，按合规口径重写话术 v2…','wa');}},
+    {d:1400,fn:()=>{state.node.script='done';log('话术Agent','话术 v2 生成（已规避违规表述）','ok');}},
+    {d:300,fn:()=>{state.node.comp1='run';log('合规Agent','复审话术 v2…','ag2');}},
+    {d:1100,fn:()=>{state.node.comp1='done';state.stepStatus[3]='done';state.activeTab='comp1';log('合规Agent','✓ 话术 v2 通过','ok');}},
+    {d:300,fn:()=>{state.node.video='run';state.stepStatus[4]='active';state.activeTab='video';log('视频Agent','话术→脚本→分镜，TTS 配音合成中…','ag2');}},
+    {d:1600,fn:()=>{state.node.video='done';state.stepStatus[4]='done';state.output.video=1;log('视频Agent','分镜+TTS+数字人成片(Mock)已产出','ok');}},
+    {d:300,fn:()=>{state.node.comp2='run';state.stepStatus[5]='active';log('合规Agent','成片多模态审核：字幕OCR+口播ASR…','ag2');}},
+    {d:1300,fn:()=>{state.node.comp2='gate';state.stepStatus[5]='active';log('合规Agent','机审通过 → 等待人工终审','wa');gateFinal();}},
+  ]);
+}
+function gateFinal(){
+  renderFlow();renderStepbar();
+  showModal('🎬 人审关卡：成片终审',`成片已通过机器合规审核（字幕/口播均合规）。请人工终审后放行分发。`,
+    [{t:'查看成片',c:'ghost',fn:()=>{closeModal();selectTab('video');}},
+     {t:'✓ 放行并分发',c:'primary',fn:()=>{closeModal();afterFinal();}}]);
+}
+function afterFinal(){
+  state.node.comp2='done';state.stepStatus[5]='done';renderFlow();renderStepbar();
+  if(state.mode==='exe'){
+    runSeq([
+      {d:200,fn:()=>{state.node.publish='run';state.stepStatus[6]='active';state.activeTab='publish';log('分发Agent','【执行】正式发布抖音/视频号/快手 + 定向投放(Mock)…','ag2');}},
+      {d:1400,fn:()=>{state.node.publish='done';state.stepStatus[6]='done';state.output.publish=1;document.getElementById('flowSub').textContent='✓ 已正式发布';log('分发Agent','发布完成，效果数据开始回流','ok');log('Orchestrator','🎉 流水线执行完毕','ok');}},
+    ]);
+  }else{
+    runSeq([
+      {d:200,fn:()=>{state.node.publish='run';state.stepStatus[6]='active';state.activeTab='publish';log('分发Agent','【预跑】联调各渠道 API：OAuth 鉴权 + 草稿校验，不真正发布…','ag2');}},
+      {d:1500,fn:()=>{state.node.publish='done';state.stepStatus[6]='done';state.output.publish=1;document.getElementById('flowSub').textContent='✓ 预跑完成 · 见自检报告';log('分发Agent','抖音/视频号/快手 API 联调通过（草稿态），未发布','ok');log('Orchestrator','🔍 预跑完成，已生成自检报告；按报告调整后点顶部「🚀 执行」正式发布','wa');}},
+    ]);
+  }
+}
+
+/* ============ MODAL ============ */
+function showModal(title,desc,acts){
+  document.getElementById('modal').innerHTML=`<h3>${title}</h3><div class="mdesc">${desc}</div>
+   <div class="banner">本环节为 Human-in-the-loop 人审关卡，合规场景强制保留人工确认。</div>
+   <div class="acts">${acts.map((a,i)=>`<button class="btn ${a.c}" data-i="${i}">${a.t}</button>`).join('')}</div>`;
+  document.querySelectorAll('#modal .acts button').forEach((b,i)=>b.onclick=acts[i].fn);
+  document.getElementById('mask').classList.add('show');
+}
+function closeModal(){document.getElementById('mask').classList.remove('show');renderDetail();renderFlow();renderTabs();}
+
+/* 支持从分发 Agent「返回总览工作台」直达历史任务列表：index.html?page=list */
+(function(){
+  try{
+    const p=new URLSearchParams(location.search).get('page');
+    if(p && document.getElementById('page-'+p)) showPage(p);
+  }catch(e){}
+})();
+</script>
+</body>
+</html>

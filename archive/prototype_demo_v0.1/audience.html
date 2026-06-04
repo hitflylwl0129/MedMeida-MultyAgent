@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>目标人群 Agent · 推导链路深度演示</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#171a23; --panel2:#1d212c; --line:#2a2f3d;
+    --txt:#e6e9ef; --txt2:#9aa3b2; --txt3:#6b7382;
+    --brand:#4f7cff; --brand2:#7a5cff; --ok:#22c08b; --warn:#f0a93b; --err:#f25c66;
+    --chip:#222736;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;font-size:14px}
+  .topbar{height:56px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:var(--panel);position:sticky;top:0;z-index:10}
+  .topbar .l{display:flex;align-items:center;gap:14px}
+  .topbar .back{color:var(--txt3);text-decoration:none;font-size:13px;display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
+  .topbar .back:hover{color:var(--txt);background:var(--panel2)}
+  .topbar h1{font-size:15px;font-weight:600}
+  .topbar h1 small{display:block;color:var(--txt3);font-weight:400;font-size:11.5px;margin-top:1px}
+  .btn{border:none;border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+  .btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+  .btn.sm{padding:6px 12px;font-size:12px}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px}
+  .sectitle{font-size:11.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;margin:4px 0 12px;display:flex;align-items:center;gap:8px}
+  .sectitle .num{width:20px;height:20px;border-radius:6px;background:var(--chip);display:inline-grid;place-items:center;color:var(--txt2);font-size:11px}
+  /* stage container */
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:18px;position:relative;opacity:.4;transition:.4s;filter:saturate(.4)}
+  .stage.on{opacity:1;filter:none}
+  .stage .arrow-d{position:absolute;left:50%;bottom:-22px;transform:translateX(-50%);color:var(--txt3);font-size:18px;z-index:2}
+  .stage.on .sectitle .num{background:var(--brand);color:#fff}
+  /* signal cards */
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media(max-width:980px){.grid4{grid-template-columns:1fr 1fr}}
+  @media(max-width:560px){.grid4{grid-template-columns:1fr}}
+  .scard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .scard .hd{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .scard .ic{width:34px;height:34px;border-radius:9px;background:var(--chip);display:grid;place-items:center;font-size:17px}
+  .scard .hd h4{font-size:13.5px}
+  .scard .hd p{font-size:11px;color:var(--txt3)}
+  .scard ul{list-style:none;font-size:12px;color:var(--txt2);line-height:1.95}
+  .scard ul li b{color:var(--txt)}
+  .chip{display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:20px;background:var(--chip);color:var(--txt2);margin:3px 4px 0 0}
+  .chip.b{background:rgba(79,124,255,.15);color:#9db8ff}
+  .chip.g{background:rgba(34,192,139,.15);color:var(--ok)}
+  .chip.w{background:rgba(240,169,59,.15);color:var(--warn)}
+  /* portrait bars */
+  .bargroups{display:grid;grid-template-columns:1fr 1fr;gap:16px 26px}
+  .bargroup h5{font-size:12px;color:var(--txt2);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+  .bargroup h5 .dt{width:7px;height:7px;border-radius:2px;background:var(--brand)}
+  .bar{margin-bottom:9px}
+  .bar .t{display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);margin-bottom:4px}
+  .bar .t b{color:var(--txt)}
+  .bar .track{height:8px;background:var(--chip);border-radius:5px;overflow:hidden}
+  .bar .fill{height:100%;width:0;background:linear-gradient(90deg,var(--brand),var(--brand2));border-radius:5px;transition:width 1s cubic-bezier(.2,.7,.2,1)}
+  .insight{margin-top:14px;background:rgba(79,124,255,.08);border:1px solid rgba(79,124,255,.25);border-radius:10px;padding:11px 13px;font-size:12px;color:#bcd0ff;line-height:1.6}
+  /* mapping table */
+  table.map{width:100%;border-collapse:collapse;font-size:11.8px}
+  table.map th,table.map td{border:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}
+  table.map th{background:var(--panel2);color:var(--txt2);font-weight:600}
+  table.map td:first-child{color:var(--txt);font-weight:600;background:rgba(255,255,255,.015)}
+  table.map .pf{font-size:10px;color:var(--txt3);display:block;margin-bottom:3px}
+  table.map code{background:var(--chip);border-radius:4px;padding:1px 5px;font-size:10.5px;color:#9fe;font-family:ui-monospace,Menlo,monospace}
+  .platcols{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  .platcol{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--txt2);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 11px}
+  .platcol .d{width:9px;height:9px;border-radius:3px}
+  /* funnel */
+  .funnel-layout{display:grid;grid-template-columns:1fr 320px;gap:20px}
+  @media(max-width:900px){.funnel-layout{grid-template-columns:1fr}}
+  .tiers{display:flex;gap:8px;margin-bottom:16px}
+  .tier{flex:1;text-align:center;padding:11px 8px;border-radius:10px;background:var(--panel2);border:1.5px solid var(--line);cursor:pointer;transition:.15s}
+  .tier:hover{border-color:var(--brand)}
+  .tier.sel{border-color:var(--brand);background:rgba(79,124,255,.1)}
+  .tier b{font-size:13px;display:block}
+  .tier span{font-size:10.5px;color:var(--txt3)}
+  .fstep{position:relative;margin:0 auto 6px;padding:11px 14px;border-radius:9px;background:var(--panel2);border:1px solid var(--line);transition:.5s;opacity:0;transform:translateY(6px)}
+  .fstep.show{opacity:1;transform:none}
+  .fstep .ft{display:flex;justify-content:space-between;align-items:baseline}
+  .fstep .ft .lb{font-size:12.5px;color:var(--txt)}
+  .fstep .ft .vv{font-size:15px;font-weight:700;color:var(--brand);font-variant-numeric:tabular-nums}
+  .fstep .nt{font-size:10.5px;color:var(--txt3);margin-top:3px}
+  .fstep.op{border-style:dashed;border-color:rgba(240,169,59,.4)}
+  .fstep.op .vv{color:var(--warn)}
+  .fstep.seed{border-color:rgba(122,92,255,.5);background:rgba(122,92,255,.08)}
+  .fstep.seed .vv{color:#b9a8ff}
+  .fstep.final{border-color:rgba(34,192,139,.55);background:rgba(34,192,139,.1)}
+  .fstep.final .vv{color:var(--ok);font-size:18px}
+  .fconn{text-align:center;color:var(--txt3);font-size:12px;line-height:14px;height:14px}
+  .resultcard{background:linear-gradient(160deg,rgba(34,192,139,.12),rgba(79,124,255,.06));border:1px solid rgba(34,192,139,.35);border-radius:14px;padding:18px;position:sticky;top:76px}
+  .resultcard .big{font-size:38px;font-weight:800;color:var(--ok);font-variant-numeric:tabular-nums;line-height:1.1}
+  .resultcard .lb{font-size:12px;color:var(--txt2);margin-top:2px}
+  .resultcard hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+  .kv{display:flex;justify-content:space-between;font-size:12px;color:var(--txt2);padding:5px 0}
+  .kv b{color:var(--txt);font-variant-numeric:tabular-nums}
+  .formula{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--txt3);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px;margin-top:12px;line-height:1.7}
+  .formula .hi{color:#9fe}
+  .banner{background:rgba(240,169,59,.1);border:1px solid rgba(240,169,59,.35);color:var(--warn);border-radius:10px;padding:10px 13px;font-size:12px;margin-bottom:16px;line-height:1.55}
+  .pulse{animation:pl 1.4s infinite}
+  @keyframes pl{0%,100%{opacity:1}50%{opacity:.45}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="l">
+    <a class="back" href="index.html">← 返回工作台</a>
+    <div><h1>🎯 目标人群 Agent<small>推导链路深度演示 · 信号融合 → 画像 → 平台标签 → 人群包估算</small></h1></div>
+  </div>
+  <div class="rbtnwrap" style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+    <button class="btn primary" id="runBtn">▶ 开始人群推导</button>
+    <small id="runHint" style="font-size:10.5px;color:var(--warn);display:none;max-width:320px;text-align:right;line-height:1.4"></small>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="banner">⚠ 关键认知：主流平台<b style="color:#ffd9a0">不会向广告主开放用户明细标签</b>。本 Agent 的真实价值 = 把"产品+医生"信号推导成<b style="color:#ffd9a0">可被平台识别的定向标签</b> + 上传<b style="color:#ffd9a0">种子人群包</b>做 Lookalike 放大。下方演示这条完整链路。</div>
+
+  <!-- STAGE 1: 信号融合 -->
+  <div class="stage" id="st1">
+    <div class="sectitle"><span class="num">1</span>输入信号融合（多源 → 统一人群假设）</div>
+    <div class="grid4">
+      <div class="scard">
+        <div class="hd"><div class="ic" id="pIc">🦠</div><div><h4>产品属性 <span class="chip g" style="margin-left:2px">↩ ①选品</span></h4><p id="pSub">—</p></div></div>
+        <ul id="pUl">
+          <li>功效域：<b>肠道/消化健康</b></li>
+          <li>适用：<b>孕妇 / 儿童可用</b></li>
+          <li>合规风险：保健品·疗效宣称受限</li>
+          <li>诉求内容：<b>专业科普向</b></li>
+        </ul>
+        <div style="margin-top:8px" id="pChips"><span class="chip b">健康养生</span><span class="chip b">母婴友好</span></div>
+      </div>
+      <div class="scard">
+        <div class="hd"><div class="ic" id="dIc">👩‍⚕️</div><div><h4>医生推荐 <span class="chip g" style="margin-left:2px">↩ ②选医生</span></h4><p id="dSub">—</p></div></div>
+        <ul id="dUl">
+          <li>科室：<b>消化内科</b></li>
+          <li>合规：良好·无违规</li>
+          <li>加权分：<b>—</b></li>
+          <li>最强项：<b>—</b></li>
+        </ul>
+        <div style="margin-top:8px" id="dChips"><span class="chip g">医生已确定</span></div>
+      </div>
+      <div class="scard">
+        <div class="hd"><div class="ic" id="fIc">👥</div><div><h4>医生粉丝画像 <span class="chip g" style="margin-left:2px">↩ ②选医生</span></h4><p id="fSub">—</p></div></div>
+        <ul id="fUl">
+          <li>粉丝主体：<b>25-45岁女性</b></li>
+          <li>内容垂类：<b>肠道/母婴科普</b></li>
+          <li>粉丝活跃平台：抖音/视频号</li>
+          <li>互动人群可作<b>种子包</b></li>
+        </ul>
+        <div style="margin-top:8px" id="fChips"><span class="chip b">女性向</span><span class="chip b">高信任科普</span></div>
+      </div>
+      <div class="scard">
+        <div class="hd"><div class="ic">🎯</div><div><h4>营销目标</h4><p>种草拉新 · 认知+兴趣</p></div></div>
+        <ul>
+          <li>阶段：<b>认知 / 兴趣</b></li>
+          <li>平台：抖音 + 视频号</li>
+          <li>诉求：扩大<b>高相关触达</b></li>
+          <li>排除：已购 / 医护从业</li>
+        </ul>
+        <div style="margin-top:8px"><span class="chip w">规避无关泛流量</span></div>
+      </div>
+    </div>
+    <div class="insight" id="fuseOut" style="display:none">🧠 <b>LLM 融合结论：</b>核心人群假设 = <b>25-45岁、一二线、关注健康养生与母婴育儿、近期有消化健康行为意图的女性</b>，以医生 128w 粉丝及高互动用户为高潜种子。</div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 2: 画像条形图 -->
+  <div class="stage" id="st2">
+    <div class="sectitle"><span class="num">2</span>人群画像生成（LLM 推导 · 多维占比）</div>
+    <div class="bargroups" id="bargroups"></div>
+    <div class="insight">📊 画像并非凭空生成：由<b>产品功效域</b>×<b>医生粉丝结构</b>×<b>平台行业大盘基线</b>加权推导，输出可量化的多维占比，作为下一步标签映射依据。</div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 3: 平台标签映射 -->
+  <div class="stage" id="st3">
+    <div class="sectitle"><span class="num">3</span>平台标签映射（抽象画像 → 各平台真实定向标签）</div>
+    <div class="platcols">
+      <div class="platcol"><span class="d" style="background:#fff"></span>巨量引擎 / 抖音</div>
+      <div class="platcol"><span class="d" style="background:#ff5000"></span>磁力引擎 / 快手</div>
+      <div class="platcol"><span class="d" style="background:#07c160"></span>腾讯广告 / 视频号</div>
+    </div>
+    <table class="map">
+      <tr><th style="width:20%">画像维度</th><th>巨量引擎（抖音）</th><th>磁力引擎（快手）</th><th>腾讯广告（视频号）</th></tr>
+      <tbody id="mapBody"></tbody>
+    </table>
+    <div class="insight">🔌 映射输出即<b>可直接写入投放后台的定向配置</b>（Mock）。真实场景通过各平台开放 API 下发；标签命名/口径按各平台体系差异自动对齐。</div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 4: 人群包漏斗 -->
+  <div class="stage" id="st4">
+    <div class="sectitle"><span class="num">4</span>人群包估算（定向收窄 → 种子包 → Lookalike 放大）</div>
+    <div class="tiers" id="tiers"></div>
+    <div class="funnel-layout">
+      <div id="funnel"></div>
+      <div>
+        <div class="resultcard">
+          <div style="font-size:11px;color:var(--txt3)">📦 最终可触达人群包（Mock · 巨量 DMP 口径）</div>
+          <div class="big" id="finalNum">—</div>
+          <div class="lb" id="finalNote">选择上方档位查看</div>
+          <hr>
+          <div class="kv"><span>核心定向池</span><b id="kvCore">—</b></div>
+          <div class="kv"><span>高潜种子包</span><b id="kvSeed">—</b></div>
+          <div class="kv"><span>Lookalike 放大系数</span><b id="kvFactor">—</b></div>
+          <div class="kv"><span>预估 CPM 区间</span><b id="kvCpm">—</b></div>
+          <div class="formula" id="formula"></div>
+        </div>
+      </div>
+    </div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 5: 联动下游 -->
+  <div class="stage" id="st5">
+    <div class="sectitle"><span class="num">5</span>联动下游（选定人群包 → 话术 Agent）</div>
+    <div class="grid3">
+      <div class="scard">
+        <div class="hd"><div class="ic">📦</div><div><h4>本环节最终选定 <span class="chip g" style="margin-left:2px">人群已确定</span></h4><p id="auMeta">—</p></div></div>
+        <ul id="auUl"></ul>
+        <div style="margin-top:8px" id="auChips"></div>
+      </div>
+      <div class="scard">
+        <div class="hd"><div class="ic">🔗</div><div><h4>下传信号</h4><p>写入话术 Agent 输入</p></div></div>
+        <ul>
+          <li>① <b>人群画像</b>：主体 / 兴趣 / 平台</li>
+          <li>② <b>人群包档位</b>：触达规模 / LAL / CPM</li>
+          <li>③ <b>产品合规口径 + 医生风格</b> 透传</li>
+          <li>映射为话术「受众设定」与生成约束</li>
+        </ul>
+        <div style="margin-top:8px"><span class="chip g">产品 + 医生 + 人群 已就绪</span></div>
+      </div>
+      <div class="scard" style="display:flex;flex-direction:column;justify-content:space-between">
+        <div>
+          <div class="hd"><div class="ic">✍️</div><div><h4>下游：话术 Agent</h4><p>RAG → 生成 → 合规审查 → 复审</p></div></div>
+          <ul>
+            <li>已就绪输入：<b>产品 + 医生 + 人群</b></li>
+            <li>下一步：按人群生成合规口播话术</li>
+            <li>合规不通过将自动打回重跑</li>
+          </ul>
+        </div>
+        <a class="btn primary" href="script.html" style="margin-top:10px;justify-content:center;text-decoration:none">→ 进入话术 Agent</a>
+      </div>
+    </div>
+    <div class="insight">🔗 目标人群 Agent 选定的<b>人群包 + 画像</b>已下传至<b>话术 Agent</b>，与上游产品合规口径、医生口播风格共同构成话术生成的「受众设定」，驱动分人群话术创作与合规闭环。</div>
+  </div>
+</div>
+
+<script>
+/* ===== 数据 ===== */
+const PORTRAIT=[
+  {g:'性别 · 年龄',items:[['25-34岁 女性',42],['35-45岁 女性',33],['25-34岁 男性',9],['其他',16]]},
+  {g:'地域分布',items:[['新一线城市',31],['一线城市',28],['二线城市',24],['三线及以下',17]]},
+  {g:'兴趣偏好',items:[['健康养生',71],['母婴育儿',64],['美食',49],['运动健身',38]]},
+  {g:'行为意图',items:[['近期搜索 肠道/消化',54],['收藏过保健内容',47],['健康类直播观看',39],['母婴用品加购',31]]},
+];
+const MAPPING=[
+  ['25-45岁女性','性别:女<br><code>age:24-40</code>','<code>gender_female</code><br>年龄:25-44','女性<br><code>age_25_44</code>'],
+  ['健康养生兴趣','行为兴趣:<code>健康·保健养生</code>','兴趣:<code>健康</code>','一级行业:<code>医疗健康-保健养生</code>'],
+  ['母婴育儿','兴趣:<code>母婴亲子</code>','人群:<code>母婴</code>','婚育状态:<code>已育</code>'],
+  ['消化健康意图','搜索词包:<code>肠道/益生菌/消化</code>','关键词定向:<code>肠道健康</code>','关键词:<code>肠道健康</code>'],
+  ['医生粉丝相似','DMP种子包<br><code>Lookalike拓展</code>','客户人群:<code>相似拓展</code>','扩展人群:<code>lookalike</code>'],
+  ['排除项','排除:<code>近30天已购</code>/医护','排除:<code>已转化</code>','排除:<code>已购买/未成年</code>'],
+];
+const TIERS={
+  narrow:{name:'精准',sub:'高相关·窄',factor:'1%',cpm:'¥32-45',color:'var(--ok)',
+    steps:[
+      {lb:'抖音月活大盘',v:'6.8 亿',nt:'平台基础可投放盘',w:100},
+      {lb:'∩ 性别·年龄（女 25-45）',v:'1.42 亿',nt:'基础人口属性定向',w:74},
+      {lb:'∩ 核心兴趣（健康养生∩母婴）',v:'1,150 万',nt:'兴趣标签强交集',w:48},
+      {lb:'∩ 强行为意图（近7天消化健康）',v:'96 万',nt:'近期行为意图收窄',w:30,strong:true},
+      {lb:'− 排除（已购/医护/未成年）',v:'79 万',nt:'核心定向池',w:24,op:true},
+      {lb:'⊕ 高潜种子包（粉丝高互动去重）',v:'38 万',nt:'医生粉丝中高互动人群',w:18,seed:true},
+      {lb:'Lookalike 1% + 跨平台去重',v:'21.3 万',nt:'最终高相关可触达',w:13,final:true},
+    ]},
+  balanced:{name:'均衡',sub:'推荐',factor:'1-3%',cpm:'¥24-36',color:'var(--brand)',
+    steps:[
+      {lb:'抖音月活大盘',v:'6.8 亿',nt:'平台基础可投放盘',w:100},
+      {lb:'∩ 性别·年龄（女 25-45）',v:'1.42 亿',nt:'基础人口属性定向',w:74},
+      {lb:'∩ 兴趣（健康养生/母婴/泛健康）',v:'3,200 万',nt:'兴趣标签并集',w:52},
+      {lb:'∩ 行为意图（近30天相关）',v:'480 万',nt:'行为意图收窄',w:34,strong:true},
+      {lb:'− 排除（已购/医护/未成年）',v:'412 万',nt:'核心定向池',w:27,op:true},
+      {lb:'⊕ 种子包（128w粉丝+历史互动去重）',v:'96 万',nt:'医生全量粉丝高潜种子',w:20,seed:true},
+      {lb:'Lookalike 1-3% + 跨平台去重',v:'52.6 万',nt:'最终高相关可触达',w:14,final:true},
+    ]},
+  broad:{name:'广覆盖',sub:'放量·宽',factor:'3-5%',cpm:'¥16-26',color:'var(--warn)',
+    steps:[
+      {lb:'抖音月活大盘',v:'6.8 亿',nt:'平台基础可投放盘',w:100},
+      {lb:'∩ 性别·年龄（女 25-48 放宽）',v:'1.68 亿',nt:'放宽年龄区间',w:78},
+      {lb:'∩ 兴趣（泛健康+泛生活）',v:'7,800 万',nt:'兴趣标签宽并集',w:58},
+      {lb:'∩ 行为意图（近90天/相关）',v:'1,520 万',nt:'弱意图也纳入',w:40,strong:true},
+      {lb:'− 排除（已购/未成年）',v:'1,360 万',nt:'核心定向池',w:33,op:true},
+      {lb:'⊕ 种子包（粉丝+泛互动）',v:'210 万',nt:'扩展种子规模',w:24,seed:true},
+      {lb:'Lookalike 3-5% + 跨平台',v:'148 万',nt:'最终可触达（相关度↓）',w:18,final:true},
+    ]},
+};
+
+/* ===== 渲染 ===== */
+function renderBars(animate){
+  document.getElementById('bargroups').innerHTML=PORTRAIT.map(g=>`
+    <div class="bargroup"><h5><span class="dt"></span>${g.g}</h5>
+      ${g.items.map(([k,v])=>`<div class="bar"><div class="t"><span>${k}</span><b>${v}%</b></div>
+        <div class="track"><div class="fill" data-w="${v}" style="width:${animate?0:v}%"></div></div></div>`).join('')}
+    </div>`).join('');
+  if(animate){requestAnimationFrame(()=>setTimeout(()=>{
+    document.querySelectorAll('#bargroups .fill').forEach(f=>f.style.width=f.dataset.w+'%');},60));}
+}
+function renderMap(){
+  document.getElementById('mapBody').innerHTML=MAPPING.map(r=>`<tr>
+    <td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('');
+}
+let curTier='balanced';
+function renderTiers(){
+  document.getElementById('tiers').innerHTML=Object.entries(TIERS).map(([k,t])=>`
+    <div class="tier ${k===curTier?'sel':''}" onclick="pickTier('${k}')">
+      <b>${t.name}</b><span>${t.sub} · LAL ${t.factor}</span></div>`).join('');
+}
+function pickTier(k){curTier=k;renderTiers();renderFunnel(true);if(hasRunAud){persistAudience();renderDownstream();}}
+function renderFunnel(animate){
+  const t=TIERS[curTier];
+  document.getElementById('funnel').innerHTML=t.steps.map((s,i)=>{
+    const cls=[s.op?'op':'',s.seed?'seed':'',s.final?'final':''].join(' ');
+    return `${i>0?'<div class="fconn">▼</div>':''}
+      <div class="fstep ${cls}" data-i="${i}"><div class="ft"><span class="lb">${s.lb}</span><span class="vv">${s.v}</span></div>
+      <div class="nt">${s.nt}</div></div>`;
+  }).join('');
+  const last=t.steps[t.steps.length-1];
+  const core=t.steps.find(s=>s.op), seed=t.steps.find(s=>s.seed);
+  const set=(id,v)=>document.getElementById(id).textContent=v;
+  set('finalNum',last.v); set('finalNote','档位：'+t.name+' · 高相关可触达');
+  set('kvCore',core.v); set('kvSeed',seed.v); set('kvFactor','LAL '+t.factor); set('kvCpm',t.cpm);
+  document.getElementById('formula').innerHTML=
+    `核心池 <span class="hi">${core.v}</span> ⊕ 种子 <span class="hi">${seed.v}</span><br>→ Lookalike(<span class="hi">${t.factor}</span>) 放大<br>→ 跨平台去重 <span class="hi">= ${last.v}</span>`;
+  document.querySelector('.resultcard .big').style.color=t.color;
+  const steps=document.querySelectorAll('#funnel .fstep');
+  if(animate){steps.forEach((el,i)=>setTimeout(()=>el.classList.add('show'),i*160));}
+  else steps.forEach(el=>el.classList.add('show'));
+}
+
+/* ===== 第5步：联动下游，选定人群包 → 话术 Agent ===== */
+let hasRunAud=false;
+function audSnapshot(){
+  const t=TIERS[curTier];
+  const last=t.steps[t.steps.length-1];
+  const core=t.steps.find(s=>s.op), seed=t.steps.find(s=>s.seed);
+  return {tier:t.name,factor:t.factor,cpm:t.cpm,reach:last.v,
+    core:core?core.v:'—',seed:seed?seed.v:'—',
+    mainAge:PORTRAIT[0].items[0][0],topInterest:PORTRAIT[2].items[0][0]};
+}
+function persistAudience(){
+  if(!(SEL_P&&SEL_D))return;
+  const s=audSnapshot();
+  try{localStorage.setItem('sv_selected_audience',JSON.stringify({
+    tier:s.tier,factor:s.factor,cpm:s.cpm,reach:s.reach,core:s.core,seed:s.seed,
+    mainAge:s.mainAge,topInterest:s.topInterest,platforms:'抖音 + 视频号',
+    product:SEL_P.name,productDomain:SEL_P.domain,risk:SEL_P.risk,appeal:SEL_P.appeal,
+    doctor:SEL_D.name,doctorFans:SEL_D.fans,doctorAudience:SEL_D.audience,doctorType:SEL_D.type||''
+  }));}catch(e){}
+}
+function renderDownstream(){
+  if(!(SEL_P&&SEL_D))return;
+  const s=audSnapshot();
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  const html=(id,v)=>{const el=document.getElementById(id);if(el)el.innerHTML=v;};
+  set('auMeta',s.tier+' 档位 · 可触达 '+s.reach);
+  html('auUl',
+    `<li>人群主体：<b>${s.mainAge}</b></li>`+
+    `<li>核心兴趣：<b>${s.topInterest}</b></li>`+
+    `<li>核心定向池：${s.core} · 种子包 ${s.seed}</li>`+
+    `<li>触达规模：<b>${s.reach}</b>（LAL ${s.factor} · CPM ${s.cpm}）</li>`);
+  html('auChips',`<span class="chip b">${s.tier}档</span><span class="chip b">${s.mainAge}</span><span class="chip g">人群已确定</span>`);
+}
+
+/* ===== 运行编排 ===== */
+let running=false;
+function run(){
+  if(!(SEL_P&&SEL_D)){return;}   /* 上游结果不全，禁止人群推导 */
+  if(running)return; running=true;
+  document.getElementById('runBtn').disabled=true;
+  document.getElementById('runBtn').innerHTML='<span class="pulse">⛓ 推导中…</span>';
+  ['st1','st2','st3','st4','st5'].forEach(id=>document.getElementById(id).classList.remove('on'));
+  renderTiers();
+  const seq=[
+    [200,()=>{on('st1');}],
+    [900,()=>{document.getElementById('fuseOut').style.display='block';}],
+    [700,()=>{on('st2');renderBars(true);}],
+    [1500,()=>{on('st3');renderMap();}],
+    [1100,()=>{on('st4');renderFunnel(true);}],
+    [1200,()=>{on('st5');hasRunAud=true;persistAudience();renderDownstream();}],   /* 选定人群包 → 下传话术 Agent */
+    [1400,()=>{
+      document.getElementById('runBtn').disabled=false;
+      document.getElementById('runBtn').innerHTML='↻ 重新推导';
+      running=false;}],
+  ];
+  let acc=0; seq.forEach(([d,fn])=>{acc+=d;setTimeout(fn,acc);});
+}
+function on(id){document.getElementById(id).classList.add('on');}
+document.getElementById('runBtn').onclick=run;
+
+/* ===== 联动上游：读取 ①选品 Agent + ②选医生 Agent 的最终结果 ===== */
+const SEL_P=(()=>{try{return JSON.parse(localStorage.getItem('sv_selected_product')||'null');}catch(e){return null;}})();
+const SEL_D=(()=>{try{return JSON.parse(localStorage.getItem('sv_selected_doctor')||'null');}catch(e){return null;}})();
+function gateAndFill(){
+  const runBtn=document.getElementById('runBtn'), hint=document.getElementById('runHint');
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  const html=(id,v)=>{const el=document.getElementById(id);if(el)el.innerHTML=v;};
+  const missing=[];
+  if(!SEL_P) missing.push('①选品 Agent');
+  if(!SEL_D) missing.push('②选医生 Agent');
+  if(missing.length){
+    /* 上游有环节未确定结果：置灰 + 提示缺哪个环节 */
+    runBtn.disabled=true;
+    hint.style.display='block';
+    hint.innerHTML='⚠ 尚未确定结果：<b>'+missing.join(' 与 ')+'</b>，请先完成后再推导人群';
+    /* 三张联动卡片显示占位 */
+    if(!SEL_P){
+      set('pIc','❔'); set('pSub','尚未选品');
+      html('pUl','<li style="color:var(--txt3)">请先在「①选品 Agent」完成选品</li>');
+      html('pChips','<span class="chip w">待选品</span>');
+    }
+    if(!SEL_D){
+      set('dIc','❔'); set('dSub','尚未选医生');
+      html('dUl','<li style="color:var(--txt3)">请先在「②选医生 Agent」完成医生匹配</li>');
+      html('dChips','<span class="chip w">待选医生</span>');
+      set('fIc','❔'); set('fSub','尚未选医生');
+      html('fUl','<li style="color:var(--txt3)">医生确定后自动关联其粉丝画像</li>');
+      html('fChips','<span class="chip w">待选医生</span>');
+    }
+    return;
+  }
+  /* 上游均已确定：恢复按钮 + 填充 4 张卡片 */
+  runBtn.disabled=false; hint.style.display='none';
+  /* 卡①产品属性 */
+  set('pIc',SEL_P.emoji); set('pSub',SEL_P.name+' · '+SEL_P.category);
+  html('pUl',
+    `<li>功效域：<b>${SEL_P.domain}</b></li>`+
+    `<li>适用：<b>${SEL_P.applicable}</b></li>`+
+    `<li>合规风险：${SEL_P.risk}</li>`+
+    `<li>诉求内容：<b>${SEL_P.appeal}</b></li>`);
+  html('pChips',(SEL_P.chips||[]).map(c=>`<span class="chip b">${c}</span>`).join(''));
+  /* 卡②医生推荐 */
+  set('dIc',SEL_D.emoji); set('dSub',SEL_D.name+' · '+SEL_D.fans);
+  html('dUl',
+    `<li>科室：<b>${SEL_D.dept}</b></li>`+
+    `<li>合规：${SEL_D.comp}</li>`+
+    `<li>加权分：<b>${SEL_D.score}</b>（${SEL_D.strat}策略）</li>`+
+    `<li>最强项：<b>${SEL_D.strongDim} ${SEL_D.strongVal}</b></li>`);
+  html('dChips','<span class="chip g">医生已确定</span>'+(SEL_D.type?`<span class="chip b">${SEL_D.type}</span>`:''));
+  /* 卡③医生粉丝画像 */
+  set('fSub',SEL_D.name+' · '+SEL_D.fans);
+  html('fUl',
+    `<li>粉丝主体：<b>${SEL_D.audience}</b></li>`+
+    `<li>内容垂类：<b>${SEL_D.vertical}</b></li>`+
+    `<li>粉丝活跃平台：${SEL_D.platform}</li>`+
+    `<li>互动人群可作<b>种子包</b></li>`);
+  html('fChips',(SEL_D.chips||[]).map(c=>`<span class="chip b">${c}</span>`).join(''));
+  /* 融合结论随上游联动 */
+  const fo=document.getElementById('fuseOut');
+  if(fo) fo.innerHTML=`🧠 <b>LLM 融合结论：</b>以 <b>${SEL_P.name}</b>（${SEL_P.domain}）的功效人群，叠加医生 <b>${SEL_D.name}</b>（${SEL_D.fans}·${SEL_D.audience}）的粉丝结构，推导核心人群假设，并以其高互动用户为高潜种子。`;
+}
+gateAndFill();
+
+/* 初始静态预览（暗态） */
+renderBars(false);renderMap();renderTiers();renderFunnel(false);renderDownstream();
+</script>
+</body>
+</html>

@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>泛健康营销 · 多Agent协同流程工作台</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#171a23; --panel2:#1d212c; --line:#2a2f3d;
+    --txt:#e6e9ef; --txt2:#9aa3b2; --txt3:#6b7382;
+    --brand:#4f7cff; --brand2:#7a5cff; --ok:#22c08b; --warn:#f0a93b; --err:#f25c66;
+    --chip:#222736;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--txt);height:100vh;overflow:hidden;font-size:14px;display:flex}
+
+  /* ===== 左侧栏 ===== */
+  .side{width:236px;flex-shrink:0;background:linear-gradient(180deg,#161a24,#10131b);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:16px 14px;overflow-y:auto}
+  .side::-webkit-scrollbar{width:6px}
+  .side::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px}
+  .side .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;margin-bottom:16px}
+  .side .brand .dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:grid;place-items:center;font-size:14px;flex-shrink:0}
+  .side .brand small{display:block;color:var(--txt3);font-weight:400;font-size:10px;margin-top:2px}
+
+  .newbtn{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border:0;border-radius:10px;padding:11px;font-size:13.5px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(79,124,255,.3);transition:.15s}
+  .newbtn:hover{filter:brightness(1.08)}
+
+  .secttl{font-size:11px;color:var(--txt3);font-weight:700;letter-spacing:.5px;margin:18px 0 8px;padding-left:2px}
+
+  /* 历史任务列表 */
+  .histpanel{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px;max-height:240px;overflow-y:auto}
+  .histpanel::-webkit-scrollbar{width:5px}
+  .histpanel::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}
+  .histitem{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:8px;cursor:pointer;transition:.13s;margin-bottom:3px}
+  .histitem:hover{background:rgba(79,124,255,.1)}
+  .histitem .he{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#3a4256,#262b39);display:grid;place-items:center;font-size:15px;flex-shrink:0}
+  .histitem .hm{flex:1;min-width:0}
+  .histitem .hm h5{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .histitem .hm span{display:block;font-size:10px;color:var(--txt3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .histempty{color:var(--txt3);font-size:11.5px;line-height:1.7;padding:8px 6px}
+  .histclear{font-size:10.5px;color:var(--txt3);cursor:pointer;text-align:right;padding:6px 4px 0;}
+  .histclear:hover{color:var(--err)}
+
+  /* 资源库 / 数据看板 项 */
+  .resitem{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:7px;cursor:pointer;transition:.14s;position:relative}
+  .resitem:hover{border-color:rgba(79,124,255,.5)}
+  .resitem.active{border-color:transparent;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 4px 14px rgba(79,124,255,.28)}
+  .resitem .ri{width:24px;height:24px;border-radius:7px;background:rgba(255,255,255,.07);display:grid;place-items:center;font-size:14px;flex-shrink:0}
+  .resitem.active .ri{background:rgba(255,255,255,.2)}
+  .resitem b{font-size:12.5px;font-weight:600}
+  .resitem.soon{cursor:not-allowed;color:var(--txt3)}
+  .resitem.soon:hover{border-color:var(--line)}
+  .resitem .soontag{margin-left:auto;font-size:9.5px;color:var(--txt3);border:1px solid var(--line);border-radius:5px;padding:2px 6px;background:var(--panel)}
+
+  .side .foot{margin-top:auto;padding-top:16px;color:var(--txt3);font-size:10px;line-height:1.7}
+
+  /* ===== 右侧主区 ===== */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+
+  /* 流程导航条 */
+  .flowbar{flex-shrink:0;background:var(--panel);border-bottom:1px solid var(--line);padding:14px 18px;display:flex;align-items:center;gap:0;overflow-x:auto}
+  .flowbar::-webkit-scrollbar{height:6px}
+  .flowbar::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px}
+  .step{flex-shrink:0;display:flex;align-items:center;gap:9px;padding:9px 15px;border-radius:11px;background:var(--panel2);border:1.5px solid var(--line);color:var(--txt2);cursor:pointer;transition:.18s;white-space:nowrap;position:relative}
+  .step:hover{border-color:rgba(79,124,255,.55);color:var(--txt)}
+  .step.active{background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:transparent;color:#fff;box-shadow:0 4px 16px rgba(79,124,255,.35)}
+  .step .si{width:24px;height:24px;border-radius:7px;background:rgba(255,255,255,.08);display:grid;place-items:center;font-size:14px;flex-shrink:0}
+  .step.active .si{background:rgba(255,255,255,.2)}
+  .step .sl{display:flex;flex-direction:column;line-height:1.25}
+  .step .sl b{font-size:13px;font-weight:600}
+  .step .sl span{font-size:10px;opacity:.72}
+  .step .done{position:absolute;top:-6px;right:-6px;width:17px;height:17px;border-radius:50%;background:var(--ok);color:#06281c;font-size:11px;font-weight:700;display:none;place-items:center;border:2px solid var(--panel)}
+  .step.ok .done{display:grid}
+  .step.locked{cursor:not-allowed;opacity:.42;filter:saturate(.4)}
+  .step.locked:hover{border-color:var(--line);color:var(--txt2)}
+  .step .lock{position:absolute;top:-6px;right:-6px;width:17px;height:17px;border-radius:50%;background:var(--txt3);color:#0f1117;font-size:10px;font-weight:700;display:none;place-items:center;border:2px solid var(--panel)}
+  .step.locked .lock{display:grid}
+  .step.locked .done{display:none}
+  .arrow{flex-shrink:0;width:26px;text-align:center;color:var(--txt3);font-size:15px;user-select:none}
+
+  /* 内容区 */
+  .framewrap{flex:1;position:relative;background:var(--bg)}
+  iframe{width:100%;height:100%;border:0;display:block;background:var(--bg)}
+  .floader{position:absolute;inset:0;display:grid;place-items:center;color:var(--txt3);font-size:13px;pointer-events:none;opacity:0;transition:.2s}
+  .floader.show{opacity:1}
+</style>
+</head>
+<body>
+  <!-- ===== 左侧栏 ===== -->
+  <aside class="side">
+    <div class="brand">
+      <span class="dot">◆</span>
+      <div>营销工作台<small>多 Agent 协同中台</small></div>
+    </div>
+
+    <button class="newbtn" id="newTaskBtn">✦ 新建任务</button>
+
+    <div class="secttl">历史任务</div>
+    <div class="histpanel" id="histPanel"></div>
+    <div class="histclear" id="histClear" style="display:none">清空历史</div>
+
+    <div class="secttl">资源库</div>
+    <div id="resList">
+      <div class="resitem soon" data-res="drug"><div class="ri">💊</div><b>药品资源库</b><span class="soontag">占位</span></div>
+      <div class="resitem" data-res="doctor"><div class="ri">🩺</div><b>医生资源库</b></div>
+      <div class="resitem soon" data-res="script"><div class="ri">✍️</div><b>话术资源库</b><span class="soontag">占位</span></div>
+      <div class="resitem soon" data-res="audience"><div class="ri">👥</div><b>人群画像资源库</b><span class="soontag">占位</span></div>
+    </div>
+
+    <div class="secttl">数据看板</div>
+    <div id="dashList">
+      <div class="resitem soon" data-res="dashboard"><div class="ri">📊</div><b>数据看板</b><span class="soontag">占位</span></div>
+    </div>
+
+    <div class="foot">演示原型 · 数据为 Mock<br>合规审查贯穿全流程</div>
+  </aside>
+
+  <!-- ===== 右侧主区 ===== -->
+  <div class="main">
+    <nav class="flowbar" id="flow"></nav>
+    <div class="framewrap">
+      <iframe id="frame" name="stage" src="product.html" title="Agent 功能页"></iframe>
+      <div class="floader" id="floader">加载中…</div>
+    </div>
+  </div>
+
+<script>
+/* ===== 流程定义（按执行顺序） ===== */
+const STEPS=[
+  {id:'product',  file:'product.html',  ic:'🛒',label:'选品 agent',     sub:'商品决策',     key:'sv_selected_product'},
+  {id:'doctor',   file:'doctor.html',   ic:'🩺',label:'选医生 agent',   sub:'达人精排',     key:'sv_selected_doctor'},
+  {id:'audience', file:'audience.html', ic:'🎯',label:'目标人群 agent', sub:'画像/人群包',  key:'sv_selected_audience'},
+  {id:'script',   file:'script.html',   ic:'✍️',label:'话术 agent',     sub:'合规话术',     key:'sv_selected_script'},
+  {id:'video',    file:'video.html',    ic:'🎬',label:'短视频制作 agent',sub:'成片合成',    key:'sv_selected_video'},
+  {id:'distribute',file:'distribute.html',ic:'📤',label:'短视频分发 agent',sub:'多平台投放', key:'sv_distribute_done'},
+];
+const LIVE_KEYS=STEPS.map(s=>s.key);
+
+const flow=document.getElementById('frame');
+const loader=document.getElementById('floader');
+
+/* ===== 渲染流程条 =====
+   顺序门禁：第一个未完成节点(firstIncomplete)及其之前的节点可点击；
+   更靠后的节点锁定不可点（必须按顺序执行）。 */
+function firstIncompleteIndex(){
+  for(let i=0;i<STEPS.length;i++){ if(!hasOutput(STEPS[i].key)) return i; }
+  return STEPS.length;
+}
+function renderFlow(activeId){
+  const wrap=document.getElementById('flow');
+  const fi=firstIncompleteIndex();
+  let html='';
+  STEPS.forEach((s,i)=>{
+    const done=hasOutput(s.key);
+    const locked=i>fi;
+    html+=`<div class="step ${s.id===activeId?'active':''} ${done?'ok':''} ${locked?'locked':''}" data-id="${s.id}" data-locked="${locked?1:0}">
+      <div class="si">${s.ic}</div>
+      <div class="sl"><b>${s.label}</b><span>${i+1}. ${s.sub}</span></div>
+      <div class="done">✓</div>
+      <div class="lock">🔒</div>
+    </div>`;
+    if(i<STEPS.length-1) html+=`<div class="arrow">→</div>`;
+  });
+  wrap.innerHTML=html;
+  wrap.querySelectorAll('.step').forEach(el=>el.onclick=()=>{
+    if(el.dataset.locked==='1'){ toast('请先完成前序节点，流程需按顺序执行'); return; }
+    goStep(el.dataset.id);
+  });
+}
+function hasOutput(key){
+  if(!key) return false;
+  try{return !!localStorage.getItem(key);}catch(e){return false;}
+}
+let _toastT=null;
+function toast(msg){
+  let t=document.getElementById('__toast');
+  if(!t){ t=document.createElement('div'); t.id='__toast';
+    t.style.cssText='position:fixed;left:50%;top:74px;transform:translateX(-50%);background:#1d212c;border:1px solid var(--warn);color:var(--txt);padding:9px 16px;border-radius:9px;font-size:12.5px;z-index:99;box-shadow:0 6px 22px rgba(0,0,0,.4);opacity:0;transition:.2s';
+    document.body.appendChild(t); }
+  t.textContent=msg; t.style.opacity='1';
+  clearTimeout(_toastT); _toastT=setTimeout(()=>t.style.opacity='0',2000);
+}
+
+/* ===== 切换 Agent 节点 ===== */
+let curId='product';
+function goStep(id){
+  const s=STEPS.find(x=>x.id===id); if(!s) return;
+  curId=id;
+  clearResActive();
+  loader.classList.add('show');
+  flow.src=s.file;
+  renderFlow(id);
+}
+
+/* ===== 新建任务：清空全链路产出 → 回到选品 ===== */
+document.getElementById('newTaskBtn').onclick=()=>{
+  LIVE_KEYS.forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
+  toast('已创建新任务，请从「选品 agent」开始');
+  curId='product';
+  clearResActive();
+  loader.classList.add('show');
+  flow.src='product.html';
+  renderFlow('product');
+};
+
+/* ===== 历史任务列表（左侧栏） ===== */
+function getTaskHistory(){
+  let list=[]; try{list=JSON.parse(localStorage.getItem('sv_task_history')||'[]');}catch(e){}
+  return Array.isArray(list)?list:[];
+}
+function fmtTime(ts){
+  if(!ts) return '';
+  const d=new Date(ts), p=n=>(n<10?'0':'')+n;
+  return `${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function renderHistory(){
+  const box=document.getElementById('histPanel');
+  const clr=document.getElementById('histClear');
+  const list=getTaskHistory();
+  if(!list.length){
+    box.innerHTML='<div class="histempty">暂无历史任务。走完整条 Agent 链路（至短视频分发）后将自动归档。</div>';
+    clr.style.display='none';
+    return;
+  }
+  clr.style.display='block';
+  box.innerHTML=list.map(t=>`
+    <div class="histitem" data-id="${t.id}" title="进入该任务工作流（默认从首节点起，可编辑）">
+      <div class="he">${t.productEmoji||'🛒'}</div>
+      <div class="hm"><h5>${t.product||'—'}</h5><span>${t.doctor||'—'} · ${fmtTime(t.ts)}</span></div>
+    </div>`).join('');
+  box.querySelectorAll('.histitem').forEach(el=>el.onclick=()=>openTask(el.dataset.id));
+}
+function openTask(id){
+  const t=getTaskHistory().find(x=>x.id===id);
+  if(!t){ renderHistory(); return; }
+  const snap=t.snapshot||{};
+  LIVE_KEYS.forEach(k=>{
+    const v=snap[k];
+    try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,v); }catch(e){}
+  });
+  toast('已载入历史任务，默认从「选品 agent」进入，可重新编辑');
+  curId='product';
+  clearResActive();
+  loader.classList.add('show');
+  flow.src='product.html';
+  renderFlow('product');
+}
+document.getElementById('histClear').onclick=()=>{
+  try{localStorage.removeItem('sv_task_history');}catch(e){}
+  renderHistory();
+};
+
+/* ===== 资源库 / 数据看板 ===== */
+function clearResActive(){ document.querySelectorAll('.resitem').forEach(el=>el.classList.remove('active')); }
+const SOON_TXT={drug:'药品资源库',script:'话术资源库',audience:'人群画像资源库',dashboard:'数据看板'};
+document.querySelectorAll('.resitem').forEach(el=>{
+  const res=el.dataset.res;
+  el.onclick=()=>{
+    if(el.classList.contains('soon')){ toast(`「${SOON_TXT[res]||'该功能'}」开发中，敬请期待`); return; }
+    if(res==='doctor') openDoctorRes(el);
+  };
+});
+/* 医生资源库：复用 index.html 既有资源库逻辑（iframe 内加载并隐藏其外壳） */
+function openDoctorRes(el){
+  clearResActive(); el.classList.add('active');
+  curId=''; renderFlow('');
+  loader.classList.add('show');
+  flow.src='index.html?page=res';
+}
+
+/* ===== iframe 加载后：同步高亮 + 注入样式 ===== */
+flow.addEventListener('load',()=>{
+  loader.classList.remove('show');
+  let path='';
+  try{ path=flow.contentWindow.location.pathname; }catch(e){ path=''; }
+  const file=path.split('/').pop();
+  const matched=STEPS.find(s=>s.file===file);
+  if(matched){ curId=matched.id; clearResActive(); renderFlow(curId); }
+  injectStyle(file);
+});
+
+/* 同源注入：子页隐藏“返回工作台”；index.html 仅保留资源库卡片 */
+function injectStyle(file){
+  try{
+    const doc=flow.contentWindow.document;
+    if(doc.getElementById('__shell_style')) return;
+    const st=doc.createElement('style');
+    st.id='__shell_style';
+    let css='.topbar .back{display:none!important;} body{min-height:auto!important;}';
+    if(file==='index.html'){
+      /* 隐藏 index 自带侧栏与顶部，仅展示资源库内容，铺满 iframe */
+      css+='.side{display:none!important;} .topbar{display:none!important;} .app{display:block!important;}'
+         +'.main{width:100%!important;} .content{padding:18px!important;}';
+    }
+    st.textContent=css;
+    doc.head.appendChild(st);
+  }catch(e){/* 跨域忽略 */}
+}
+
+/* 首次渲染 */
+renderFlow('product');
+renderHistory();
+/* 子页产出变化时刷新流程徽标与历史列表 */
+window.addEventListener('focus',()=>{renderFlow(curId);renderHistory();});
+setInterval(()=>{renderFlow(curId);renderHistory();},2500);
+</script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+#!/bin/bash
+# sv-mode: SecureVault 查看模式开关
+# 用法:
+#   ./sv-mode              查看当前模式
+#   ./sv-mode cipher       切到全密文
+#   ./sv-mode plain        切到全明文
+#   ./sv-mode whitelist    回到按白名单模式
+set -u
+
+CONTROL_FILE="${SV_BACKEND:-$HOME/.sv_demo_store}/.sv_control"
+
+if [[ ! -e "$CONTROL_FILE" ]]; then
+  echo "!! 控制文件不存在: $CONTROL_FILE"
+  echo "   请先启动 sv_demo.py (或检查 SV_BACKEND 环境变量是否正确)"
+  exit 1
+fi
+
+usage() {
+  cat <<EOF
+SecureVault 查看模式开关
+当前模式: $(cat "$CONTROL_FILE")
+控制文件: $CONTROL_FILE
+
+用法:
+  sv-mode              查看当前模式
+  sv-mode cipher       切到全密文 (任何应用读都返回密文)
+  sv-mode plain        切到全明文 (任何应用读都返回明文)
+  sv-mode whitelist    回到按白名单模式 (默认)
+
+模式含义:
+  cipher    -> "丢了电脑也安全" — 一律密文
+  plain     -> "我是文件主人, 临时全开" — 一律明文
+  whitelist -> "正常工作模式" — 白名单进程看明文, 其他看密文
+EOF
+}
+
+if [[ $# -eq 0 ]]; then
+  usage
+  exit 0
+fi
+
+NEW_MODE="$1"
+case "$NEW_MODE" in
+  cipher|plain|whitelist)
+    OLD=$(cat "$CONTROL_FILE")
+    echo "$NEW_MODE" > "$CONTROL_FILE"
+    echo "模式已切换: $OLD -> $NEW_MODE  (立即生效, 无需重启 demo)"
+    ;;
+  -h|--help|help)
+    usage
+    ;;
+  *)
+    echo "!! 未知模式: $NEW_MODE"
+    echo "   只能是 cipher / plain / whitelist 之一"
+    exit 1
+    ;;
+esac

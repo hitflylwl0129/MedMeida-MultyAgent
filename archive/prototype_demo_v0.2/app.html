@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>泛健康营销 · 多Agent协同流程工作台</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#171a23; --panel2:#1d212c; --line:#2a2f3d;
+    --txt:#e6e9ef; --txt2:#9aa3b2; --txt3:#6b7382;
+    --brand:#4f7cff; --brand2:#7a5cff; --ok:#22c08b; --warn:#f0a93b; --err:#f25c66;
+    --chip:#222736;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--txt);height:100vh;overflow:hidden;font-size:14px;display:flex;flex-direction:column}
+
+  /* ===== 顶部品牌条 ===== */
+  .appbar{height:50px;flex-shrink:0;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#161a24,#10131b);display:flex;align-items:center;justify-content:space-between;padding:0 18px}
+  .appbar .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:14.5px}
+  .appbar .logo .dot{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:grid;place-items:center;font-size:13px}
+  .appbar .logo small{display:block;color:var(--txt3);font-weight:400;font-size:10.5px;margin-top:1px}
+  .appbar .acts{display:flex;align-items:center;gap:8px}
+  .appbar a.lnk{color:var(--txt2);text-decoration:none;font-size:12px;border:1px solid var(--line);border-radius:7px;padding:6px 11px;background:var(--panel2)}
+  .appbar a.lnk:hover{color:var(--txt);border-color:var(--brand)}
+
+  /* ===== 流程导航条 ===== */
+  .flowbar{flex-shrink:0;background:var(--panel);border-bottom:1px solid var(--line);padding:14px 18px;display:flex;align-items:center;gap:0;overflow-x:auto}
+  .flowbar::-webkit-scrollbar{height:6px}
+  .flowbar::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px}
+  .step{flex-shrink:0;display:flex;align-items:center;gap:9px;padding:9px 15px;border-radius:11px;background:var(--panel2);border:1.5px solid var(--line);color:var(--txt2);cursor:pointer;transition:.18s;white-space:nowrap;position:relative}
+  .step:hover{border-color:rgba(79,124,255,.55);color:var(--txt)}
+  .step.active{background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:transparent;color:#fff;box-shadow:0 4px 16px rgba(79,124,255,.35)}
+  .step .si{width:24px;height:24px;border-radius:7px;background:rgba(255,255,255,.08);display:grid;place-items:center;font-size:14px;flex-shrink:0}
+  .step.active .si{background:rgba(255,255,255,.2)}
+  .step .sl{display:flex;flex-direction:column;line-height:1.25}
+  .step .sl b{font-size:13px;font-weight:600}
+  .step .sl span{font-size:10px;opacity:.72}
+  .step .done{position:absolute;top:-6px;right:-6px;width:17px;height:17px;border-radius:50%;background:var(--ok);color:#06281c;font-size:11px;font-weight:700;display:none;place-items:center;border:2px solid var(--panel)}
+  .step.ok .done{display:grid}
+  .arrow{flex-shrink:0;width:26px;text-align:center;color:var(--txt3);font-size:15px;user-select:none}
+
+  /* ===== 内容区 ===== */
+  .framewrap{flex:1;position:relative;background:var(--bg)}
+  iframe{width:100%;height:100%;border:0;display:block;background:var(--bg)}
+  .floader{position:absolute;inset:0;display:grid;place-items:center;color:var(--txt3);font-size:13px;pointer-events:none;opacity:0;transition:.2s}
+  .floader.show{opacity:1}
+</style>
+</head>
+<body>
+  <!-- 品牌条 -->
+  <header class="appbar">
+    <div class="logo">
+      <span class="dot">◆</span>
+      <div>泛健康营销中台<small>多 Agent 协同 · 流程工作台</small></div>
+    </div>
+    <div class="acts">
+      <a class="lnk" href="index.html" target="_top">▤ 总览工作台</a>
+    </div>
+  </header>
+
+  <!-- 流程导航条 -->
+  <nav class="flowbar" id="flow"></nav>
+
+  <!-- 功能区 -->
+  <div class="framewrap">
+    <iframe id="frame" name="stage" src="product.html" title="Agent 功能页"></iframe>
+    <div class="floader" id="floader">加载中…</div>
+  </div>
+
+<script>
+/* ===== 流程定义（按执行顺序） ===== */
+const STEPS=[
+  {id:'product',  file:'product.html',  ic:'🛒',label:'选品 agent',     sub:'商品决策',     key:'sv_selected_product'},
+  {id:'doctor',   file:'doctor.html',   ic:'🩺',label:'选医生 agent',   sub:'达人精排',     key:'sv_selected_doctor'},
+  {id:'audience', file:'audience.html', ic:'🎯',label:'目标人群 agent', sub:'画像/人群包',  key:'sv_selected_audience'},
+  {id:'script',   file:'script.html',   ic:'✍️',label:'话术 agent',     sub:'合规话术',     key:'sv_selected_script'},
+  {id:'video',    file:'video.html',    ic:'🎬',label:'短视频制作 agent',sub:'成片合成',    key:'sv_selected_video'},
+  {id:'distribute',file:'distribute.html',ic:'📤',label:'短视频分发 agent',sub:'多平台投放', key:'sv_distribute_done'},
+];
+
+const flow=document.getElementById('frame');
+const loader=document.getElementById('floader');
+
+/* ===== 渲染流程条 ===== */
+function renderFlow(activeId){
+  const wrap=document.getElementById('flow');
+  let html='';
+  STEPS.forEach((s,i)=>{
+    const done=hasOutput(s.key);
+    html+=`<div class="step ${s.id===activeId?'active':''} ${done?'ok':''}" data-id="${s.id}">
+      <div class="si">${s.ic}</div>
+      <div class="sl"><b>${s.label}</b><span>${i+1}. ${s.sub}</span></div>
+      <div class="done">✓</div>
+    </div>`;
+    if(i<STEPS.length-1) html+=`<div class="arrow">→</div>`;
+  });
+  wrap.innerHTML=html;
+  wrap.querySelectorAll('.step').forEach(el=>el.onclick=()=>goStep(el.dataset.id));
+}
+function hasOutput(key){
+  if(!key) return false;
+  try{return !!localStorage.getItem(key);}catch(e){return false;}
+}
+
+/* ===== 切换 ===== */
+let curId='product';
+function goStep(id){
+  const s=STEPS.find(x=>x.id===id); if(!s) return;
+  curId=id;
+  loader.classList.add('show');
+  flow.src=s.file;
+  renderFlow(id);
+}
+
+/* ===== iframe 加载后：同步高亮 + 注入样式隐藏“返回工作台” ===== */
+flow.addEventListener('load',()=>{
+  loader.classList.remove('show');
+  let path='';
+  try{ path=flow.contentWindow.location.pathname; }catch(e){ path=''; }
+  const file=path.split('/').pop();
+  const matched=STEPS.find(s=>s.file===file);
+  if(matched){ curId=matched.id; }
+  renderFlow(curId);
+  injectStyle();
+});
+
+/* 同源注入：隐藏子页内的“← 返回工作台”，避免 iframe 内跳回总览破坏外壳 */
+function injectStyle(){
+  try{
+    const doc=flow.contentWindow.document;
+    if(doc.getElementById('__shell_style')) return;
+    const st=doc.createElement('style');
+    st.id='__shell_style';
+    st.textContent='.topbar .back{display:none!important;} body{min-height:auto!important;}';
+    doc.head.appendChild(st);
+  }catch(e){/* 跨域忽略 */}
+}
+
+/* 首次渲染 */
+renderFlow('product');
+/* 子页内若发生 localStorage 变化（产出更新），窗口聚焦时刷新完成态徽标 */
+window.addEventListener('focus',()=>renderFlow(curId));
+setInterval(()=>renderFlow(curId),2500);
+</script>
+</body>
+</html>

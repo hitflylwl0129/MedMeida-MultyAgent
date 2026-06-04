@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>话术 Agent · 推导链路深度演示</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#171a23; --panel2:#1d212c; --line:#2a2f3d;
+    --txt:#e6e9ef; --txt2:#9aa3b2; --txt3:#6b7382;
+    --brand:#4f7cff; --brand2:#7a5cff; --ok:#22c08b; --warn:#f0a93b; --err:#f25c66;
+    --chip:#222736;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;font-size:14px}
+  .topbar{height:56px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:var(--panel);position:sticky;top:0;z-index:10}
+  .topbar .l{display:flex;align-items:center;gap:14px}
+  .topbar .back{color:var(--txt3);text-decoration:none;font-size:13px;display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
+  .topbar .back:hover{color:var(--txt);background:var(--panel2)}
+  .topbar h1{font-size:15px;font-weight:600}
+  .topbar h1 small{display:block;color:var(--txt3);font-weight:400;font-size:11.5px;margin-top:1px}
+  .btn{border:none;border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+  .btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+  .btn.sm{padding:6px 12px;font-size:12px}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px}
+  .sectitle{font-size:11.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.6px;margin:4px 0 12px;display:flex;align-items:center;gap:8px}
+  .sectitle .num{width:20px;height:20px;border-radius:6px;background:var(--chip);display:inline-grid;place-items:center;color:var(--txt2);font-size:11px}
+  .sectitle .rt{margin-left:auto}
+  /* stage */
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:18px;position:relative;opacity:.4;transition:.4s;filter:saturate(.4)}
+  .stage.on{opacity:1;filter:none}
+  .stage .arrow-d{position:absolute;left:50%;bottom:-22px;transform:translateX(-50%);color:var(--txt3);font-size:18px;z-index:2}
+  .stage.on .sectitle .num{background:var(--brand);color:#fff}
+  /* signal cards */
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media(max-width:980px){.grid4{grid-template-columns:1fr 1fr}}
+  @media(max-width:560px){.grid4{grid-template-columns:1fr}.grid3{grid-template-columns:1fr}}
+  .scard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .scard .hd{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .scard .ic{width:34px;height:34px;border-radius:9px;background:var(--chip);display:grid;place-items:center;font-size:17px}
+  .scard .hd h4{font-size:13.5px}
+  .scard .hd p{font-size:11px;color:var(--txt3)}
+  .scard ul{list-style:none;font-size:12px;color:var(--txt2);line-height:1.95}
+  .scard ul li b{color:var(--txt)}
+  .chip{display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:20px;background:var(--chip);color:var(--txt2);margin:3px 4px 0 0}
+  .chip.b{background:rgba(79,124,255,.15);color:#9db8ff}
+  .chip.g{background:rgba(34,192,139,.15);color:var(--ok)}
+  .chip.w{background:rgba(240,169,59,.15);color:var(--warn)}
+  .chip.r{background:rgba(242,92,102,.15);color:var(--err)}
+  .insight{margin-top:14px;background:rgba(79,124,255,.08);border:1px solid rgba(79,124,255,.25);border-radius:10px;padding:11px 13px;font-size:12px;color:#bcd0ff;line-height:1.6}
+  /* segment selector */
+  .segrow{display:flex;gap:8px;margin:12px 0 4px;flex-wrap:wrap}
+  .seg{flex:1;min-width:150px;display:flex;align-items:center;gap:9px;background:var(--panel2);border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;cursor:pointer;transition:.15s}
+  .seg:hover{border-color:var(--brand)}
+  .seg.sel{border-color:var(--brand);background:rgba(79,124,255,.1)}
+  .seg .em{font-size:18px}
+  .seg h5{font-size:12.5px}
+  .seg p{font-size:10.5px;color:var(--txt3);margin-top:1px}
+  /* rag hits */
+  .raggrp{margin-bottom:10px}
+  .raggrp .gl{font-size:11.5px;color:var(--txt2);margin-bottom:6px;display:flex;align-items:center;gap:7px}
+  .raggrp .gl .ic{font-size:14px}
+  .raggrp .gl .cnt{margin-left:auto;font-size:10.5px;color:var(--txt3)}
+  .hit{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--brand);border-radius:8px;padding:9px 11px;margin-bottom:6px;font-size:12px;color:var(--txt2);line-height:1.55}
+  .hit.law{border-left-color:var(--err)}
+  .hit.style{border-left-color:var(--brand2)}
+  .hit.tpl{border-left-color:var(--ok)}
+  .hit .src{font-size:10px;color:var(--txt3);display:block;margin-top:4px}
+  .hit b{color:var(--txt)}
+  /* prompt */
+  .prompt{font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.75;color:var(--txt2);background:#0c0e14;border:1px solid var(--line);border-radius:10px;padding:13px;white-space:pre-wrap;max-height:260px;overflow:auto}
+  .prompt .k{color:#7a5cff} .prompt .v{color:#9fe} .prompt .c{color:var(--txt3)}
+  details summary{cursor:pointer;font-size:12px;color:var(--brand);outline:none}
+  /* script box */
+  .scriptbox{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:14px;margin-bottom:10px}
+  .scriptbox h4{font-size:13px;margin-bottom:9px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .scriptbox p{font-size:13.5px;line-height:2;color:var(--txt)}
+  .hl{background:rgba(242,92,102,.22);color:#ffb3b8;border-radius:3px;padding:0 3px;text-decoration:underline wavy var(--err);cursor:help}
+  .hlk{background:rgba(34,192,139,.2);color:#9fe;border-radius:3px;padding:0 3px}
+  .scriptbox .meta{margin-top:10px;font-size:10.5px;color:var(--txt3);display:flex;gap:14px;flex-wrap:wrap;border-top:1px dashed var(--line);padding-top:9px}
+  .badge{font-size:10.5px;padding:2px 9px;border-radius:20px}
+  .badge.err{background:rgba(242,92,102,.18);color:var(--err)}
+  .badge.ok{background:rgba(34,192,139,.18);color:var(--ok)}
+  .badge.wa{background:rgba(240,169,59,.18);color:var(--warn)}
+  /* compliance */
+  .crow{display:flex;gap:10px;padding:9px 11px;background:var(--panel2);border-radius:9px;margin-bottom:7px;font-size:12px;align-items:flex-start;line-height:1.5}
+  .crow .i{flex-shrink:0}
+  .crow b{color:var(--txt)}
+  .verdict{border-radius:11px;padding:12px 14px;margin-bottom:12px;font-weight:600;display:flex;align-items:center;gap:9px;font-size:13.5px}
+  .verdict.block{background:rgba(242,92,102,.12);border:1px solid rgba(242,92,102,.4);color:var(--err)}
+  .verdict.pass{background:rgba(34,192,139,.12);border:1px solid rgba(34,192,139,.4);color:var(--ok)}
+  .backNote{display:none;margin-bottom:12px;background:rgba(240,169,59,.1);border:1px solid rgba(240,169,59,.4);color:var(--warn);border-radius:10px;padding:10px 13px;font-size:12px;line-height:1.6}
+  .pulse{animation:pl 1.4s infinite}@keyframes pl{0%,100%{opacity:1}50%{opacity:.45}}
+  .typing::after{content:'▌';animation:bl .8s steps(1) infinite;color:var(--brand)}
+  @keyframes bl{50%{opacity:0}}
+  .banner{background:rgba(240,169,59,.1);border:1px solid rgba(240,169,59,.35);color:var(--warn);border-radius:10px;padding:10px 13px;font-size:12px;margin-bottom:16px;line-height:1.55}
+  .tip{position:fixed;background:#000;border:1px solid var(--line);border-radius:8px;padding:8px 11px;font-size:11.5px;color:var(--txt);max-width:260px;line-height:1.5;z-index:99;display:none;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="l">
+    <a class="back" href="index.html">← 返回工作台</a>
+    <div><h1>✍️ 话术 Agent<small>推导链路深度演示 · 上游融合 → RAG → Prompt → 生成 → 合规审查（不过打回重跑）→ 联动短视频</small></h1></div>
+  </div>
+  <div class="rbtnwrap" style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+    <button class="btn primary" id="runBtn">▶ 生成话术</button>
+    <small id="runHint" style="font-size:10.5px;color:var(--warn);display:none;max-width:340px;text-align:right;line-height:1.4"></small>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="banner">⚠ 核心认知：医疗健康话术的红线是<b style="color:#ffd9a0">合规</b>。本 Agent 把<b style="color:#ffd9a0">产品受控口径 + 医生口播风格 + 目标人群 + 爆款结构</b>经 RAG 注入 Prompt 生成话术，并由<b style="color:#ffd9a0">合规审查</b>逐句把关——<b style="color:#ffd9a0">一旦不通过，整条流程自动打回步骤①重跑</b>，直到产出合规话术后再移交短视频制作 Agent。</div>
+
+  <!-- STAGE 1: 上游信号融合 -->
+  <div class="stage" id="st1">
+    <div class="sectitle"><span class="num">1</span>上游信号融合（产品 + 医生 + 人群 → 话术生成约束）<span class="chip b rt" id="roundTag">待运行</span></div>
+    <div class="backNote" id="backNote">↩ 上一轮合规审查<b>未通过</b>，已自动<b>返回步骤①</b>，按受控口径重新走完整条生成流程（RAG → Prompt → 生成 → 复审）。</div>
+    <div class="grid4">
+      <div class="scard">
+        <div class="hd"><div class="ic" id="pIc">🦠</div><div><h4>产品受控口径 <span class="chip g" style="margin-left:2px">↩ ①选品</span></h4><p id="pSub">—</p></div></div>
+        <ul id="pUl">
+          <li>功效域：<b>肠道/消化健康</b></li>
+          <li>合规口径：仅可宣称"维持菌群平衡"</li>
+          <li>禁区：疗效 / 代言 / 绝对化用语</li>
+          <li>诉求内容：<b>专业科普向</b></li>
+        </ul>
+        <div style="margin-top:8px" id="pChips"><span class="chip b">健康养生</span><span class="chip w">疗效宣称受限</span></div>
+      </div>
+      <div class="scard">
+        <div class="hd"><div class="ic" id="dIc">👩‍⚕️</div><div><h4>医生口播风格 <span class="chip g" style="margin-left:2px">↩ ②选医生</span></h4><p id="dSub">—</p></div></div>
+        <ul id="dUl">
+          <li>出镜：<b>—</b></li>
+          <li>风格：专业亲和 · 设问开场</li>
+          <li>收尾："科学养护，从日常做起"</li>
+          <li>合规：<b>—</b></li>
+        </ul>
+        <div style="margin-top:8px" id="dChips"><span class="chip b">科普向</span><span class="chip b">设问开场</span></div>
+      </div>
+      <div class="scard">
+        <div class="hd"><div class="ic" id="aIc">🎯</div><div><h4>目标人群 <span class="chip g" style="margin-left:2px">↩ ③人群</span></h4><p id="aSub">—</p></div></div>
+        <ul id="aUl">
+          <li>人群主体：<b>—</b></li>
+          <li>核心兴趣：<b>—</b></li>
+          <li>投放平台：抖音 + 视频号</li>
+          <li>可触达：<b>—</b></li>
+        </ul>
+        <div style="margin-top:8px" id="aChips"><span class="chip g">人群已确定</span></div>
+      </div>
+      <div class="scard">
+        <div class="hd"><div class="ic">🎬</div><div><h4>话术结构 / 目标</h4><p>22s 竖版口播</p></div></div>
+        <ul>
+          <li>结构：<b>痛点→科普→带入→引导</b></li>
+          <li>阶段：认知 / 兴趣（种草）</li>
+          <li>口吻：口语化 · 第二人称</li>
+          <li>下游：移交<b>短视频制作 Agent</b></li>
+        </ul>
+        <div style="margin-top:8px"><span class="chip b">爆款结构</span><span class="chip b">高完播</span></div>
+      </div>
+    </div>
+    <div class="sectitle" style="margin-top:16px">话术受众侧重（切换将重新生成并重新过审）</div>
+    <div class="segrow" id="segRow"></div>
+    <div class="insight" id="fuseOut" style="display:none">🧠 <b>融合结论：</b>以产品受控口径为红线、医生口播风格为语气、目标人群为受众，组装为带「合规约束」的生成指令。</div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 2: RAG 检索 -->
+  <div class="stage" id="st2">
+    <div class="sectitle"><span class="num">2</span>RAG 检索（合规口径库 + 医生风格语料 + 爆款结构模板）</div>
+    <div id="ragBox"><div style="color:var(--txt3);font-size:12px">运行后从知识库召回相关片段…</div></div>
+    <div class="insight">🔎 三路召回并入上下文：<b>合规口径库</b>（决定红线，下一步审查依据）+ <b>医生历史口播风格</b>（语气指纹）+ <b>同类爆款结构</b>（完播优化）。其中合规知识是后续逐句审查的判定来源。</div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 3: Prompt 组装 -->
+  <div class="stage" id="st3">
+    <div class="sectitle"><span class="num">3</span>Prompt 组装（RAG 注入 + 约束拼装）</div>
+    <details id="pmt"><summary>展开查看组装后的 Prompt（含 RAG 注入与合规约束）</summary>
+      <div class="prompt" id="promptBox" style="margin-top:10px"></div>
+    </details>
+    <div class="insight">🧩 把检索片段与产品/人群输入拼装为结构化 Prompt：<b>System 角色 + 风格约束 + RAG 合规口径 + 爆款结构 + 输入变量</b>，并显式声明"严格遵守合规口径"。</div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 4: LLM 生成 -->
+  <div class="stage" id="st4">
+    <div class="sectitle"><span class="num">4</span>LLM 生成话术（按 Prompt 直出 → 进入合规审查）</div>
+    <div id="draftBox"><div style="color:var(--txt3);font-size:12px">运行后生成话术草稿…</div></div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 5: 合规审查 -->
+  <div class="stage" id="st5">
+    <div class="sectitle"><span class="num">5</span>合规审查（违禁词规则 + LLM 语义 · 逐句判定）</div>
+    <div id="compBox"><div style="color:var(--txt3);font-size:12px">运行后对草稿逐句扫描…</div></div>
+    <div class="insight">🛡 审查 = <b>违禁词/规则引擎</b>（疗效、代言、绝对化、时限承诺）+ <b>LLM 语义判定</b>（隐性暗示）。<b style="color:#ffb3b8">不通过 → 整条流程打回步骤① 重跑</b>；通过 → 进入下游联动。</div>
+    <div class="arrow-d">↓</div>
+  </div>
+
+  <!-- STAGE 6: 联动下游 -->
+  <div class="stage" id="st6">
+    <div class="sectitle"><span class="num">6</span>联动下游（合规话术 → 短视频制作 Agent）</div>
+    <div class="grid3">
+      <div class="scard">
+        <div class="hd"><div class="ic">📝</div><div><h4>本环节最终产出 <span class="chip g" style="margin-left:2px" id="okChip">待生成</span></h4><p id="sMeta">—</p></div></div>
+        <ul id="sUl"></ul>
+        <div style="margin-top:8px" id="sChips"></div>
+      </div>
+      <div class="scard">
+        <div class="hd"><div class="ic">🔗</div><div><h4>下传信号</h4><p>写入短视频制作 Agent 输入</p></div></div>
+        <ul>
+          <li>① <b>合规话术正文</b>（终稿）</li>
+          <li>② <b>口播时长 / 结构 / 字幕口径</b></li>
+          <li>③ <b>出镜医生 + 目标人群</b> 透传</li>
+          <li>作为分镜脚本 / TTS / 字幕生成依据</li>
+        </ul>
+        <div style="margin-top:8px"><span class="chip g">话术已过审</span></div>
+      </div>
+      <div class="scard" style="display:flex;flex-direction:column;justify-content:space-between">
+        <div>
+          <div class="hd"><div class="ic">🎬</div><div><h4>下游：短视频制作 Agent</h4><p>分镜 → TTS → 数字人 → 成片复审</p></div></div>
+          <ul>
+            <li>已就绪输入：<b>合规话术</b></li>
+            <li>下一步：拆解分镜 + 配音合成</li>
+            <li>成片再做多模态合规复审</li>
+          </ul>
+        </div>
+        <a class="btn primary" id="toVideo" href="video.html" style="margin-top:10px;justify-content:center;text-decoration:none;pointer-events:none;opacity:.4">→ 进入短视频制作 Agent</a>
+      </div>
+    </div>
+    <div class="insight">🔗 话术 Agent 产出的<b>合规终稿</b>（含时长/结构/字幕口径）已下传至<b>短视频制作 Agent</b>，与出镜医生、目标人群共同驱动分镜拆解、TTS 配音、数字人合成与成片多模态合规复审。</div>
+  </div>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+/* ===== 上游联动：读取 ①选品 / ②选医生 / ③目标人群 的结果 ===== */
+const SEL_P=(()=>{try{return JSON.parse(localStorage.getItem('sv_selected_product')||'null');}catch(e){return null;}})();
+const SEL_D=(()=>{try{return JSON.parse(localStorage.getItem('sv_selected_doctor')||'null');}catch(e){return null;}})();
+const SEL_A=(()=>{try{return JSON.parse(localStorage.getItem('sv_selected_audience')||'null');}catch(e){return null;}})();
+
+/* ===== 受众侧重（决定话术口吻与终稿） ===== */
+const AUDIENCES={
+  women:{em:'🙋‍♀️',name:'肠道健康关注女性',desc:'25-45岁 · 养生意识强',
+    v2:'很多朋友会关注肠道健康。其实我们的肠道里住着大量菌群，<k>维持菌群平衡</k>对日常状态很重要。日常可以适当补充<k>活性益生菌</k>，帮助维持肠道菌群平衡。科学养护，从日常做起。',
+    meta:['口播时长 ≈ 21s','风格匹配 96%','可读性 A']},
+  mom:{em:'🤱',name:'母婴 / 育儿人群',desc:'已育女性 · 关注全家健康',
+    v2:'当妈以后，更在意全家人的肠道状态。这款活性益生菌<k>孕妇和孩子也能吃</k>，每条含 200 亿活性菌，帮助<k>维持肠道菌群平衡</k>，口味温和不刺激。日常补充，全家安心。',
+    meta:['口播时长 ≈ 22s','风格匹配 93%','可读性 A']},
+  worker:{em:'💻',name:'都市熬夜白领',desc:'外卖+作息乱 · 亚健康',
+    v2:'经常加班、外卖、作息乱，肠道也容易"闹脾气"。忙起来顾不上，可以随手补充一条<k>活性益生菌</k>，帮助<k>维持肠道菌群平衡</k>。给身体一点科学的日常养护。',
+    meta:['口播时长 ≈ 20s','风格匹配 91%','可读性 A']},
+};
+let curAud='women';
+
+/* ===== RAG 命中 ===== */
+const RAG={
+  law:{ic:'⚖️',title:'合规宣称口径库',cls:'law',hits:[
+    ['<b>保健食品广告禁止表述疗效</b>。不得出现"治疗/治愈/根治"等医疗用语。','《广告法》§18 · 知识库 doc#K-031'],
+    ['<b>禁止利用医生、患者形象作推荐证明</b>。','《广告法》§16 / §18 · doc#K-014'],
+    ['益生菌类<b>允许</b>宣称："有助于维持肠道菌群平衡"（蓝帽子功能声称）。','保健食品功能声称目录 · doc#K-077'],
+    ['禁止"最/第一/彻底/100%"等<b>绝对化用语</b>。','《广告法》§9 · doc#K-008'],
+  ]},
+  style:{ic:'🎙️',title:'医生历史口播风格语料',cls:'style',hits:[
+    ['"很多朋友会问我……其实……" —— <b>设问开场</b>，亲和不说教。','出镜医生·历史短视频 ×27 条蒸馏'],
+    ['"科学养护，从日常做起" —— <b>收尾习惯</b>，弱化推销感。','出镜医生·风格指纹'],
+  ]},
+  tpl:{ic:'🏆',title:'同类爆款结构模板',cls:'tpl',hits:[
+    ['<b>痛点(0-3s) → 科普(3-10s) → 产品自然带入(10-18s) → 行动引导(18-22s)</b>','保健品种草 Top 结构 · 命中率 73%'],
+    ['口语化、短句、第二人称"你/姐妹们"提升完播率。','平台完播率优化经验库'],
+  ]},
+};
+
+/* ===== v1（含违规，固定演示打回） ===== */
+const V1='姐妹们！这款益生菌<span class="hl" data-t="疗效宣称：保健食品不得宣称治疗/根治疾病｜违《广告法》§18">能彻底治好你的便秘</span>，<span class="hl" data-t="医生代言：禁止利用医生形象作推荐证明｜违《广告法》§16/§18">我作为医生强烈推荐</span>，效果<span class="hl" data-t="绝对化用语：禁止&quot;最/彻底&quot;等表述｜违《广告法》§9">堪称最好</span>，吃了<span class="hl" data-t="功效时限承诺：不得承诺具体见效时间｜违《广告法》§18">三天就根治</span>肠道问题！';
+const VIOLATIONS=[
+  ['🟥','「彻底治好/根治便秘」','疗效宣称 — 保健食品不得宣称治疗疾病','《广告法》§18'],
+  ['🟥','「我作为医生强烈推荐」','医生代言 — 禁止利用医生作推荐证明','《广告法》§16/§18'],
+  ['🟥','「最好」','绝对化用语','《广告法》§9'],
+  ['🟥','「三天就根治」','功效时限承诺 + 疗效宣称','《广告法》§18'],
+];
+
+/* ===== Prompt 文本 ===== */
+function promptText(){
+  const a=AUDIENCES[curAud];
+  const docName=(SEL_D&&SEL_D.name)||'李静 主任医师';
+  return `<span class="c"># System</span>
+你是资深医疗健康内容编导，为<span class="v">${docName}</span>撰写短视频口播话术。
+<span class="k">风格约束</span>：专业亲和 / 科普向 / 设问开场 / 结尾"科学养护"。
+
+<span class="c"># 检索注入（RAG）</span>
+<span class="k">合规口径</span>：仅可宣称"有助于维持肠道菌群平衡"；禁疗效/代言/绝对化用语。
+<span class="k">爆款结构</span>：痛点→科普→产品带入→行动引导（22s）。
+
+<span class="c"># 输入</span>
+<span class="k">产品</span>：${(SEL_P&&SEL_P.name)||'活性益生菌'} 200亿活性菌/条，孕妇儿童可用
+<span class="k">目标人群</span>：<span class="v">${a.name}</span>（${a.desc}）
+<span class="k">平台</span>：${(SEL_A&&SEL_A.platforms)||'抖音 + 视频号'} · 22s 竖版
+
+<span class="c"># 输出</span>
+口语化短句，第二人称；严格遵守合规口径。`;
+}
+
+/* ===== 上游门禁 + 信号融合卡片填充 ===== */
+const UP_OK=!!SEL_A;   /* 目标人群为直接上游；其已确定隐含产品+医生确定 */
+function gateAndFill(){
+  const runBtn=document.getElementById('runBtn'), hint=document.getElementById('runHint');
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  const html=(id,v)=>{const el=document.getElementById(id);if(el)el.innerHTML=v;};
+  if(!UP_OK){
+    runBtn.disabled=true; hint.style.display='block';
+    hint.innerHTML='⚠ 尚未确定结果：<b>③目标人群 Agent</b>，请先完成人群推导并联动下游后再生成话术';
+    set('aIc','❔'); set('aSub','尚未确定人群');
+    html('aUl','<li style="color:var(--txt3)">请先在「③目标人群 Agent」完成人群推导</li>');
+    html('aChips','<span class="chip w">待选人群</span>');
+    return;
+  }
+  runBtn.disabled=false; hint.style.display='none';
+  /* 产品受控口径 */
+  if(SEL_P){
+    set('pIc',SEL_P.emoji); set('pSub',SEL_P.name+' · '+SEL_P.category);
+    html('pUl',
+      `<li>功效域：<b>${SEL_P.domain}</b></li>`+
+      `<li>合规口径：仅可宣称"维持菌群平衡"</li>`+
+      `<li>合规风险：${SEL_P.risk}</li>`+
+      `<li>诉求内容：<b>${SEL_P.appeal}</b></li>`);
+    html('pChips',(SEL_P.chips||[]).map(c=>`<span class="chip b">${c}</span>`).join('')+'<span class="chip w">疗效宣称受限</span>');
+  }
+  /* 医生口播风格 */
+  if(SEL_D){
+    set('dIc',SEL_D.emoji); set('dSub',SEL_D.name+' · '+SEL_D.fans);
+    html('dUl',
+      `<li>出镜：<b>${SEL_D.name}（${SEL_D.dept}）</b></li>`+
+      `<li>风格：专业亲和 · 设问开场</li>`+
+      `<li>收尾："科学养护，从日常做起"</li>`+
+      `<li>合规：${SEL_D.comp}</li>`);
+    html('dChips','<span class="chip b">科普向</span><span class="chip b">设问开场</span>'+(SEL_D.type?`<span class="chip b">${SEL_D.type}</span>`:''));
+  }
+  /* 目标人群 */
+  set('aIc','🎯'); set('aSub',SEL_A.tier+'档 · 可触达 '+SEL_A.reach);
+  html('aUl',
+    `<li>人群主体：<b>${SEL_A.mainAge}</b></li>`+
+    `<li>核心兴趣：<b>${SEL_A.topInterest}</b></li>`+
+    `<li>投放平台：${SEL_A.platforms}</li>`+
+    `<li>可触达：<b>${SEL_A.reach}</b>（LAL ${SEL_A.factor}）</li>`);
+  html('aChips',`<span class="chip b">${SEL_A.tier}档</span><span class="chip b">${SEL_A.mainAge}</span><span class="chip g">人群已确定</span>`);
+}
+
+/* ===== 渲染左侧受众侧重 ===== */
+function renderSeg(){
+  document.getElementById('segRow').innerHTML=Object.entries(AUDIENCES).map(([k,a])=>`
+    <div class="seg ${k===curAud?'sel':''}" onclick="pickAud('${k}')">
+      <span class="em">${a.em}</span><div><h5>${a.name}</h5><p>${a.desc}</p></div></div>`).join('');
+}
+function pickAud(k){curAud=k;renderSeg();if(hasRun)run();}
+
+/* ===== 编排 ===== */
+let hasRun=false, attempt=0, timers=[];
+function clearTimers(){timers.forEach(t=>clearTimeout(t));timers=[];}
+function at(ms,fn){timers.push(setTimeout(fn,ms));}
+function on(id){const e=document.getElementById(id);e.classList.add('on');e.scrollIntoView({behavior:'smooth',block:'center'});}
+function off(){[].slice.call(arguments).forEach(id=>document.getElementById(id).classList.remove('on'));}
+
+function run(){
+  if(!UP_OK){return;}
+  hasRun=true; clearTimers(); attempt=0;
+  const btn=document.getElementById('runBtn');
+  btn.disabled=true; btn.innerHTML='<span class="pulse">⚙ 生成中…</span>';
+  document.getElementById('fuseOut').style.display='block';
+  document.getElementById('backNote').style.display='none';
+  runFlow();
+}
+
+/* 单轮：步骤①→⑤；不过则回到①重跑，过则进⑥ */
+function runFlow(){
+  attempt++;
+  off('st2','st3','st4','st5','st6');
+  ['ragBox','draftBox','compBox'].forEach(id=>{document.getElementById(id).innerHTML='';});
+  document.getElementById('promptBox').innerHTML=promptText();
+  const rt=document.getElementById('roundTag');
+  rt.textContent='第 '+attempt+' 轮生成'+(attempt>1?' · 合规打回后重跑':'');
+  rt.className='chip rt '+(attempt>1?'w':'b');
+  document.getElementById('backNote').style.display=attempt>1?'block':'none';
+
+  at(120,()=>on('st1'));
+  at(600,()=>{on('st2');renderRag();});
+  at(2300,()=>on('st3'));
+  at(2800,()=>{on('st4');renderDraft();});
+  at(5200,()=>{on('st5');renderCompliance();});
+}
+
+function renderRag(){
+  const box=document.getElementById('ragBox');
+  box.innerHTML=['law','style','tpl'].map(g=>`
+    <div class="raggrp"><div class="gl"><span class="ic">${RAG[g].ic}</span>${RAG[g].title}<span class="cnt">命中 ${RAG[g].hits.length}</span></div>
+    <div id="rg-${g}"></div></div>`).join('');
+  let d=0;
+  ['law','style','tpl'].forEach(g=>RAG[g].hits.forEach(h=>{
+    at(150+(d++)*170,()=>{const t=document.getElementById('rg-'+g);if(t)t.innerHTML+=
+      `<div class="hit ${RAG[g].cls}">${h[0]}<span class="src">↳ ${h[1]}</span></div>`;});
+  }));
+}
+
+function renderDraft(){
+  const a=AUDIENCES[curAud];
+  const box=document.getElementById('draftBox');
+  if(attempt===1){
+    box.innerHTML=`<div class="scriptbox"><h4><span>初稿 v1 · 面向「${a.name}」</span><span class="badge wa">LLM 直出 · 未过滤</span></h4>
+      <p id="dp" class="typing"></p>
+      <div class="meta"><span>⚠ 直出可能含违规表述，提交合规审查</span></div></div>`;
+    typeInto('dp',V1,18);
+  }else{
+    box.innerHTML=`<div class="scriptbox"><h4><span>重写稿 · 面向「${a.name}」</span><span class="badge ok">按合规口径生成</span></h4>
+      <p id="dp" class="typing"></p>
+      <div class="meta">${a.meta.map(m=>`<span>✓ ${m}</span>`).join('')}</div></div>`;
+    typeInto('dp',a.v2.replace(/<k>/g,'<span class="hlk">').replace(/<\/k>/g,'</span>'),20);
+  }
+}
+
+function renderCompliance(){
+  const box=document.getElementById('compBox');
+  if(attempt===1){
+    box.innerHTML=`<div class="verdict block"><span class="pulse">🛡</span> <span id="scanMsg">逐句扫描中…（违禁词规则 + LLM 语义）</span></div><div id="vlist"></div>`;
+    let d=0;
+    VIOLATIONS.forEach(v=>at(400+(d++)*350,()=>{
+      const t=document.getElementById('vlist');if(t)t.innerHTML+=
+        `<div class="crow"><span class="i">${v[0]}</span><div><b>${v[1]}</b> — ${v[2]} <span class="badge err">${v[3]}</span></div></div>`;
+    }));
+    const tEnd=400+VIOLATIONS.length*350+300;
+    at(tEnd,()=>{const m=document.getElementById('scanMsg');if(m)m.innerHTML=`✕ 判定 <b>不通过</b>：命中 ${VIOLATIONS.length} 项违规 → 返回步骤① 重跑整条流程`;});
+    at(tEnd+1400,()=>{runFlow();});   /* 合规不过 → 回到步骤① 重跑 */
+  }else{
+    box.innerHTML=`<div class="verdict pass"><span>✓</span> 复审通过 · 符合《广告法》《互联网广告管理办法》</div>
+      <div class="crow"><span class="i">🟩</span><div><b>疗效 / 代言 / 绝对化 / 时限承诺</b> 表述已全部移除，替换为合规功能声称「维持肠道菌群平衡」</div></div>
+      <div class="crow"><span class="i">🟦</span><div><b>规则 + 语义双引擎</b>：违禁词库命中 0 项，LLM 语义无隐性疗效暗示</div></div>`;
+    at(900,()=>{on('st6');renderDownstream();persistScript();
+      const tv=document.getElementById('toVideo');tv.style.pointerEvents='auto';tv.style.opacity='1';
+      const btn=document.getElementById('runBtn');btn.disabled=false;btn.innerHTML='↻ 重新生成';});
+  }
+}
+
+/* ===== 第6步：联动下游，合规话术 → 短视频制作 Agent ===== */
+function plainText(s){return s.replace(/<\/?k>/g,'');}
+function renderDownstream(){
+  const a=AUDIENCES[curAud];
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  const html=(id,v)=>{const el=document.getElementById(id);if(el)el.innerHTML=v;};
+  document.getElementById('okChip').textContent='合规终稿';
+  document.getElementById('okChip').className='chip g';
+  set('sMeta','面向「'+a.name+'」· '+a.meta[0]);
+  html('sUl',
+    `<li>话术正文：<b>已过审终稿（${attempt} 轮收敛）</b></li>`+
+    `<li>结构：痛点→科普→带入→引导</li>`+
+    `<li>出镜医生：${(SEL_D&&SEL_D.name)||'—'}</li>`+
+    `<li>${a.meta[1]} · ${a.meta[2]}</li>`);
+  html('sChips','<span class="chip g">合规通过</span><span class="chip b">'+a.meta[0]+'</span>');
+}
+function persistScript(){
+  const a=AUDIENCES[curAud];
+  try{localStorage.setItem('sv_selected_script',JSON.stringify({
+    seg:a.name, text:plainText(a.v2), meta:a.meta,
+    duration:a.meta[0], styleMatch:a.meta[1],
+    structure:'痛点→科普→产品带入→行动引导',
+    product:(SEL_P&&SEL_P.name)||'', productDomain:(SEL_P&&SEL_P.domain)||'',
+    doctor:(SEL_D&&SEL_D.name)||'', doctorEmoji:(SEL_D&&SEL_D.emoji)||'👩‍⚕️',
+    audienceTier:(SEL_A&&SEL_A.tier)||'', mainAge:(SEL_A&&SEL_A.mainAge)||'',
+    platforms:(SEL_A&&SEL_A.platforms)||'抖音 + 视频号', rounds:attempt
+  }));}catch(e){}
+}
+
+/* ===== 打字机 ===== */
+function typeInto(id,htmlStr,speed){
+  const el=document.getElementById(id);if(!el)return;
+  const tokens=htmlStr.match(/<[^>]+>|[^<]/g)||[];
+  let i=0; el.classList.add('typing');el.innerHTML='';
+  (function tk(){
+    if(i>=tokens.length){el.classList.remove('typing');bindTips();return;}
+    el.innerHTML+=tokens[i++];
+    timers.push(setTimeout(tk, tokens[i-1].startsWith('<')?0:speed));
+  })();
+}
+
+/* ===== 违规高亮 tooltip ===== */
+const tip=document.getElementById('tip');
+function bindTips(){
+  document.querySelectorAll('.hl').forEach(el=>{
+    el.onmouseenter=e=>{tip.textContent=el.dataset.t;tip.style.display='block';move(e);};
+    el.onmousemove=move; el.onmouseleave=()=>tip.style.display='none';
+  });
+}
+function move(e){tip.style.left=Math.min(e.clientX+14,innerWidth-280)+'px';tip.style.top=(e.clientY+16)+'px';}
+
+document.getElementById('runBtn').onclick=run;
+renderSeg();gateAndFill();
+document.getElementById('promptBox').innerHTML=promptText();
+</script>
+</body>
+</html>

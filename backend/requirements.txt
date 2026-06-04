@@ -1,0 +1,21 @@
+# Web / 编排
+fastapi>=0.110
+uvicorn[standard]>=0.29
+sse-starlette>=2.1
+pydantic>=2.6
+pydantic-settings>=2.2
+python-dotenv>=1.0
+
+# 编排状态机（Runtime 文档：单进程 LangGraph 起步）
+langgraph>=0.2.0
+
+# 腾讯云点播 SDK（CreateAigcVideoTask / DescribeTaskDetail）
+tencentcloud-sdk-python-vod>=3.0.1300
+
+# 医生形象图上传到 VOD（可选：本地文件直传需要）
+# 若只用 URL 拉取上传(PullUpload) 可不装；本地文件直传需要它
+vod-python-sdk>=1.4.4
+
+# 话术 Agent LLM 客户端（OpenAI 兼容端点：腾讯云 lkeap / hy3-preview）
+openai>=1.40
+

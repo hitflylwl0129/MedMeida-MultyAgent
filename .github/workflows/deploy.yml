@@ -1,0 +1,117 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+    # 文档/纯 markdown 改动不触发部署，避免无意义重启
+    paths-ignore:
+      - '**.md'
+      - 'archive/**'
+      - 'securevault_demo/**'
+      - '.gitignore'
+      - 'LICENSE'
+  workflow_dispatch:        # 允许在 GitHub UI 手动触发
+
+# 同一时刻只跑一份部署，新提交会取消还在排队的旧部署
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: rsync + systemd restart
+    runs-on: ubuntu-latest
+    environment: production         # 可选：在仓库里给 production 加保护规则（人工审批等）
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup SSH
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          # 写入私钥
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # 信任目标主机指纹（用 ssh-keyscan 抓真实 fingerprint，避免 MITM 风险）
+          ssh-keyscan -p "${{ secrets.DEPLOY_PORT }}" -H "${{ secrets.DEPLOY_HOST }}" \
+            >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+          # 自检：能否免密登录
+          ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes \
+              -p "${{ secrets.DEPLOY_PORT }}" \
+              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+              "echo 'SSH OK on '\$(hostname)"
+
+      - name: Sync backend
+        run: |
+          set -euo pipefail
+          rsync -az --delete \
+            --exclude='.venv' \
+            --exclude='.cache' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='.env' \
+            --exclude='*.log' \
+            --exclude='data/' \
+            --exclude='.DS_Store' \
+            -e "ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -p ${{ secrets.DEPLOY_PORT }}" \
+            ./backend/ \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/video-agent/backend/"
+
+      - name: Sync prototype
+        run: |
+          set -euo pipefail
+          rsync -az --delete \
+            --exclude='.DS_Store' \
+            -e "ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -p ${{ secrets.DEPLOY_PORT }}" \
+            ./prototype/ \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/video-agent/prototype/"
+
+      - name: Install changed Python deps & restart service
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes \
+              -p "${{ secrets.DEPLOY_PORT }}" \
+              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+              'set -e
+               cd /opt/video-agent/backend
+               # 若 requirements.txt 有更新则增量安装（pip 自带去重，安装已存在版本基本是 no-op）
+               .venv/bin/pip install -q -r requirements.txt -i https://mirrors.tencent.com/pypi/simple
+               systemctl restart video-agent.service
+               sleep 2
+               systemctl is-active video-agent.service'
+
+      - name: Health check
+        run: |
+          set -euo pipefail
+          URL="http://${{ secrets.DEPLOY_HOST }}/api/health"
+          echo "GET $URL"
+          for i in 1 2 3 4 5 6 7 8; do
+            if curl -fsS --max-time 5 "$URL" >/dev/null 2>&1; then
+              echo ""
+              echo "✓ 服务就绪："
+              curl -sS "$URL"
+              echo ""
+              exit 0
+            fi
+            echo "等待第 $i 次…"
+            sleep 2
+          done
+          echo "✗ 健康检查 8 次未通过" >&2
+          # 失败时 dump 远端日志方便排查
+          ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes \
+              -p "${{ secrets.DEPLOY_PORT }}" \
+              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+              'tail -n 80 /var/log/video-agent.log' >&2 || true
+          exit 1
+
+      - name: Cleanup SSH key
+        if: always()
+        run: |
+          rm -f ~/.ssh/id_ed25519 ~/.ssh/known_hosts

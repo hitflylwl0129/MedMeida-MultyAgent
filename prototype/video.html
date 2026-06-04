@@ -144,6 +144,22 @@
     <table class="sb"><thead><tr><th style="width:7%">镜</th><th style="width:13%">时长</th><th style="width:32%">画面</th><th>口播台词</th><th style="width:20%">字幕</th></tr></thead>
       <tbody id="sbBody"></tbody>
     </table>
+
+    <!-- 真实生成时显示：传给腾讯云 VOD 接口的完整 Prompt -->
+    <div id="promptBox" style="display:none;margin-top:12px;padding:12px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:11px">
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--txt2);margin-bottom:8px">
+        <span>📡 传入接口（<code>vod.tencentcloudapi.com</code> · <code>CreateAigcVideoTask</code>）的 <b>Prompt 全文</b></span>
+        <span id="promptMeta" style="color:var(--txt3);font-size:11px">—</span>
+      </div>
+      <textarea id="promptText" readonly
+        style="width:100%;min-height:120px;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--txt);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.7;resize:vertical;white-space:pre-wrap;word-break:break-all"
+        placeholder="等待真实生成任务提交后，此处将完整显示接口入参 Prompt…"></textarea>
+      <div style="margin-top:6px;text-align:right">
+        <button type="button" id="promptCopy" class="btn"
+          style="padding:4px 10px;font-size:11px">复制</button>
+      </div>
+    </div>
+
     <div class="insight">🎞 分镜由话术正文按「痛点→科普→带入→引导」结构切分，每镜对齐口播与字幕文案；字幕文本即口播文本，保证后续多模态审核口径一致。</div>
     <div class="arrow-d">↓</div>
   </div>
@@ -405,6 +421,45 @@ function mountRealVideo(url,cover){
   box.innerHTML=`<video src="${url}" ${cover?`poster="${cover}"`:''} controls playsinline
       style="width:100%;height:100%;object-fit:cover;border-radius:14px;background:#000"></video>`;
 }
+
+/* 显示传给腾讯云 VOD 接口的 Prompt 全文（task1） */
+function showPromptBox(text,meta){
+  const box=document.getElementById('promptBox');
+  const ta=document.getElementById('promptText');
+  const m=document.getElementById('promptMeta');
+  if(!box||!ta)return;
+  box.style.display='block';
+  ta.value=text||'';
+  if(m) m.textContent=meta||(text?`${[...text].length} 字`:'—');
+}
+async function fetchAndShowPrompt(jobId){
+  if(!jobId)return;
+  // 提交后 prompt.txt 可能要 1-2 秒才落盘；这里温和重试
+  for(let i=0;i<6;i++){
+    try{
+      const r=await fetch(BACKEND+'/api/video/jobs/'+jobId+'/prompt');
+      if(r.ok){
+        const j=await r.json();
+        if(j&&j.ready&&j.prompt){
+          showPromptBox(j.prompt,`${[...j.prompt].length} 字 · 来源 prompt.txt`);
+          return;
+        }
+      }
+    }catch(_){}
+    await new Promise(r=>setTimeout(r,1500));
+  }
+  showPromptBox('','(等待 prompt.txt 落盘超时)');
+}
+/* 复制 Prompt 到剪贴板 */
+document.getElementById('promptCopy')?.addEventListener('click',async()=>{
+  const ta=document.getElementById('promptText');
+  if(!ta||!ta.value)return;
+  try{ await navigator.clipboard.writeText(ta.value);
+    const btn=document.getElementById('promptCopy'); const old=btn.textContent;
+    btn.textContent='✓ 已复制'; setTimeout(()=>btn.textContent=old,1500);
+  }catch(_){ ta.select(); document.execCommand('copy'); }
+});
+
 function stageOn(stage){ if(stage&&document.getElementById(stage)) on(stage); }
 
 /* 医生形象库：从后端拉取 6 个人设，渲染缩略选择器，记录选中 key */
@@ -452,6 +507,9 @@ async function realRun(){
   showRealHint('正在创建生视频任务…');
   off('st2','st3','st4','st5');
   document.getElementById('compBox').innerHTML='';
+  // 重置 Prompt 展示区
+  const _pb=document.getElementById('promptBox'); if(_pb){_pb.style.display='none';}
+  const _pt=document.getElementById('promptText'); if(_pt){_pt.value='';}
   on('st1'); document.getElementById('fuseOut').style.display='block';
 
   // 健康检查（给出清晰的前置提示）
@@ -493,7 +551,11 @@ async function realRun(){
     realBtn.innerHTML=`<span class="pulse">⚡ ${d.progress}% · ${d.status}</span>`;
     showRealHint(d.message||'');
     if(d.data){
-      if(d.data.storyboard) renderStoryboardFromBackend(d.data.storyboard);
+      if(d.data.storyboard){
+        renderStoryboardFromBackend(d.data.storyboard);
+        // 分镜出来后，主动拉一次本次 job 的 Prompt 全文展示在表格下方
+        fetchAndShowPrompt(jobId);
+      }
       if(d.data.output&&d.data.output.url) mountRealVideo(d.data.output.url,d.data.output.cover_url);
     }
     if(d.status==='done'){

@@ -152,6 +152,25 @@ async def get_job_file(job_id: str):
     )
 
 
+@app.get("/api/video/jobs/{job_id}/prompt")
+async def get_job_prompt(job_id: str) -> dict:
+    """返回该 job 实际提交给腾讯云 VOD 接口的 Prompt 全文（写入 prompt.txt 的快照）。
+
+    用于前端「分镜面板」下方完整展示 Prompt 文本，便于复核口径。
+    任务存在但 prompt.txt 尚未落盘（提交前）时返回空串。
+    """
+    if not store.get(job_id):
+        raise HTTPException(404, "任务不存在")
+    path = _LOCAL_JOBS_DIR / job_id / "prompt.txt"
+    if not path.is_file():
+        return {"prompt": "", "ready": False}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as e:  # noqa: BLE001
+        raise HTTPException(500, f"读取 prompt.txt 失败：{e}") from e
+    return {"prompt": text, "ready": True}
+
+
 
 @app.get("/api/video/jobs")
 async def list_jobs() -> list[VideoJob]:

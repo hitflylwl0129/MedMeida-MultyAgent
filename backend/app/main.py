@@ -20,16 +20,24 @@ from pathlib import Path
 from dotenv import load_dotenv as _load_dotenv
 _load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from .config import get_settings
-from .schemas import BiliPublishRequest, CreateJobRequest, GenerateScriptRequest, JobStatus, VideoJob
+from .schemas import (
+    BiliPublishRequest,
+    CreateJobRequest,
+    GenerateScriptRequest,
+    JobStatus,
+    ProductBriefRequest,
+    ProductJob,
+    VideoJob,
+)
 from . import doctors, store
 from .agents import bilibili_agent, script_agent
-from .worker import bus, start_job
+from .worker import bus, start_job, start_product_job
 
 
 logging.basicConfig(
@@ -39,6 +47,8 @@ log = logging.getLogger("video-agent")
 
 # 本地链路成片目录（与 orchestrator/graph.py 保持一致）
 _LOCAL_JOBS_DIR = Path(__file__).resolve().parent.parent / ".cache" / "jobs"
+# 选品 Agent v2.0 任务目录（独立命名空间，与视频链路解耦）
+_PRODUCT_JOBS_DIR = Path(__file__).resolve().parent.parent / ".cache" / "product_jobs"
 
 
 app = FastAPI(title="短视频制作 Agent", version="0.1.0")
@@ -412,6 +422,93 @@ async def bilibili_publish(req: BiliPublishRequest):
 
     return EventSourceResponse(gen())
 
+
+
+
+# --------------------------------------------------------------------------- #
+# 选品 Agent v2.0：文件上传 + 创建任务 + 查询 + SSE
+# --------------------------------------------------------------------------- #
+_PRODUCT_UPLOAD_MAX = 10 * 1024 * 1024   # 10 MB 上限
+_PRODUCT_UPLOAD_EXTS = {".xlsx", ".xls", ".csv"}
+
+
+@app.post("/api/product/upload")
+async def product_upload(file: UploadFile = File(...)) -> dict:
+    """选品 Agent v2.0：上传销量表文件，返回 upload_path 用于后续创建 job。"""
+    import uuid as _uuid
+
+    name = (file.filename or "upload.xlsx").rsplit("/", 1)[-1]
+    suffix = Path(name).suffix.lower()
+    if suffix not in _PRODUCT_UPLOAD_EXTS:
+        raise HTTPException(400, f"仅支持 {sorted(_PRODUCT_UPLOAD_EXTS)} 格式")
+
+    tok = _uuid.uuid4().hex[:12]
+    target = _PRODUCT_JOBS_DIR / "_uploads" / tok / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    size = 0
+    with target.open("wb") as f:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > _PRODUCT_UPLOAD_MAX:
+                f.close()
+                target.unlink(missing_ok=True)
+                raise HTTPException(413, f"文件超过上限 {_PRODUCT_UPLOAD_MAX // (1024*1024)} MB")
+            f.write(chunk)
+
+    rel = str(target.relative_to(Path(__file__).resolve().parent.parent))
+    return {"upload_path": rel, "upload_name": name, "size": size}
+
+
+@app.post("/api/product/jobs")
+async def create_product_job(req: ProductBriefRequest) -> dict:
+    s = get_settings()
+    if not s.agr_ready:
+        raise HTTPException(500, "Agent Runtime 未就绪：请在 backend/.env 设 AGR_ENABLED=true + E2B_API_KEY")
+    if not req.upload_path:
+        raise HTTPException(400, "请先调用 /api/product/upload 上传销量表")
+
+    job = ProductJob(brief=req)
+    store.save_product(job)
+    await start_product_job(job)
+    return {"job_id": job.id, "status": job.status}
+
+
+@app.get("/api/product/jobs/{job_id}")
+async def get_product_job(job_id: str) -> ProductJob:
+    job = store.get_product(job_id)
+    if not job:
+        raise HTTPException(404, "选品任务不存在")
+    return job
+
+
+@app.get("/api/product/jobs")
+async def list_product_jobs() -> list[ProductJob]:
+    return store.list_recent_products()
+
+
+@app.get("/api/product/jobs/{job_id}/events")
+async def product_job_events(job_id: str):
+    job = store.get_product(job_id)
+    if not job:
+        raise HTTPException(404, "选品任务不存在")
+
+    queue = bus.subscribe(job_id)
+
+    async def gen():
+        try:
+            while True:
+                ev = await queue.get()
+                yield {"event": "progress", "data": ev.model_dump_json()}
+                if ev.status in (JobStatus.DONE, JobStatus.FAILED):
+                    break
+        finally:
+            bus.unsubscribe(job_id, queue)
+
+    return EventSourceResponse(gen())
 
 
 if __name__ == "__main__":

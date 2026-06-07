@@ -149,3 +149,71 @@ class ProgressEvent(BaseModel):
     message: str
     stage: str = ""              # 对应前端 st1..st5
     data: dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------- 选品 Agent v2.0（基于腾讯云 Agent Runtime 沙箱）---------- #
+# 设计原则（详见《选品Agent_AgentRuntime技术路线分析.md》）：
+#   - 业务编排在我们 FastAPI 进程内（LangGraph），不上 AGR
+#   - 仅"跑用户上传 Excel 的 pandas 解析 / 打分"借沙箱执行
+#   - 输出 sv_selected_product 字段保持与 v1.0 一致，下游选医生 Agent 零改动
+
+class ProductBriefRequest(BaseModel):
+    """选品 Agent v2.0 入参——前端把上传的 Excel 解析后塞这里。
+
+    upload_path 是后端落盘的临时文件相对路径（backend/.cache/product_jobs/{job_id}/uploads/xxx.xlsx），
+    由 /api/product/upload 端点返回。
+    """
+    upload_path: str = ""              # Excel/CSV 文件后端路径
+    upload_name: str = ""              # 原始文件名（仅展示用）
+    brief: str = ""                    # 用户对客群/季节/预算等的自由文本（可选）
+    structure_hint: str = "保健食品 / 大健康"   # 行业大类提示（可选）
+
+
+class ProductCandidate(BaseModel):
+    """单个候选品——下游字段与 prototype/product.html v1.0 的 PRODUCT_PROFILE 完全对齐，
+    以保证 v2.0 的产出可以直接 setItem 到 sv_selected_product，下游选医生 Agent 零改动。
+    """
+    id: str = ""                     # v2_xxx 由后端生成
+    emoji: str = "🛒"
+    name: str = ""                   # 例：益生菌粉
+    category: str = "保健食品"        # 与 v1.0 PRODUCT_PROFILE.category 同义
+    dept: str = ""                   # 例："消化内科 / 营养科"
+    domain: str = ""                 # 例："肠道 / 消化健康"
+    applicable: str = ""             # 例："孕妇 / 儿童可用"
+    risk: str = "保健品·疗效宣称受限"
+    appeal: str = "专业科普向"
+    chips: list[str] = Field(default_factory=list)
+    # —— v2.0 新增的可观测字段（v1.0 没有，下游 doctor.html 自动忽略）—— #
+    sales_score: float = 0.0         # 销售表现得分（来自用户上传 Excel 的 pandas 打分）
+    trend_score: float = 0.0         # 行情趋势得分（v2.0 MVP=Mock，后续接药监局/百度指数）
+    final_score: float = 0.0
+    rationale: str = ""              # LLM 给的一句话理由（⑤汇总产物）
+
+
+class ProductOutput(BaseModel):
+    """选品 Agent v2.0 最终产出。"""
+    candidates: list[ProductCandidate] = Field(default_factory=list)
+    top1_id: str = ""                # 默认推荐——即下游 sv_selected_product 应该用的那条
+    data_summary: dict[str, Any] = Field(default_factory=dict)
+    strat: str = "agent_v2"          # 与 v1.0 PRODUCT_PROFILE.strat 同义，便于下游识别版本
+
+
+class ProductJob(BaseModel):
+    """选品 Agent v2.0 任务实体。"""
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
+    status: JobStatus = JobStatus.PENDING
+    progress: int = 0
+    message: str = ""
+
+    brief: ProductBriefRequest
+
+    # 沙箱可观测：跑出过哪些 AGR 实例，便于事后排障
+    sandbox_ids: list[str] = Field(default_factory=list)
+
+    output: Optional[ProductOutput] = None
+    error: str = ""
+    created_at: float = Field(default_factory=time.time)
+    updated_at: float = Field(default_factory=time.time)
+
+    def touch(self) -> None:
+        self.updated_at = time.time()

@@ -75,16 +75,19 @@ def _understand_brief(brief: ProductBriefRequest) -> dict:
 # ② 数据解析（AGR 代码沙箱里跑 pandas）
 # ----------------------------------------------------------------------------- #
 # 沙箱内执行的 pandas runner —— 这段代码作为字符串发到沙箱里跑，不在主进程执行
+# 用 __UPLOAD_PATH__ 占位符注入用户上传文件的实际沙箱路径（含真实扩展名），
+# 避免硬写 sales.xlsx 导致 _read 按错扩展名解析。
 _PARSE_RUNNER = textwrap.dedent("""
     import json, os
     import pandas as pd
     import numpy as np
 
-    UPLOAD = "/home/user/uploads/sales.xlsx"  # 由 sb.files.write 投递
+    UPLOAD = __UPLOAD_PATH__  # 由主进程注入实际路径字符串
 
-    # 兼容 xlsx / csv（按扩展名 fallback）
+    # 兼容 xlsx / xls / csv（按扩展名）
     def _read(p):
-        if p.endswith(".csv"):
+        p_low = p.lower()
+        if p_low.endswith(".csv"):
             return pd.read_csv(p)
         return pd.read_excel(p)
 
@@ -98,9 +101,9 @@ _PARSE_RUNNER = textwrap.dedent("""
                     return c
         return None
 
-    col_name  = _find(["产品", "品名", "SKU", "商品"])
-    col_qty   = _find(["销量", "销售量", "数量"])
-    col_amt   = _find(["金额", "销售额", "营收"])
+    col_name  = _find(["产品", "品名", "SKU", "商品", "名称"])
+    col_qty   = _find(["销量", "销售量", "数量", "件数"])
+    col_amt   = _find(["金额", "销售额", "营收", "收入"])
     col_dept  = _find(["科室", "类别", "分类"])
 
     summary = {
@@ -147,27 +150,41 @@ _PARSE_RUNNER = textwrap.dedent("""
 
 
 def _parse_excel_in_sandbox(upload_path: Path, sandbox_ids: list[str]) -> dict:
-    """打开沙箱 → 投递 Excel → 跑 pandas runner → 解析 stdout → 销毁。"""
+    """打开沙箱 → 投递文件 → 跑 pandas runner → 解析 stdout → 销毁。"""
     if not upload_path.is_file():
         raise FileNotFoundError(f"上传文件不存在：{upload_path}")
 
+    # 保留真实扩展名（避免 csv 被当 xlsx 解析）
+    suffix = upload_path.suffix.lower() or ".xlsx"
+    sandbox_path = f"/home/user/uploads/sales{suffix}"
+
     with code_sandbox() as sb:
         sandbox_ids.append(sb.sandbox_id)
-        # 把本地文件写到沙箱固定路径
+        # 把本地文件写到沙箱
         with upload_path.open("rb") as f:
-            sb.files.write("/home/user/uploads/sales.xlsx", f.read())
+            sb.files.write(sandbox_path, f.read())
 
         # 装 pandas + openpyxl（公网模式拉包）
-        sb.run_code(
+        pip_r = sb.run_code(
             "import subprocess, sys; "
             "subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', "
-            "'pandas', 'openpyxl'], check=True)"
+            "'pandas', 'openpyxl'], check=True); print('installed')"
         )
-        r = sb.run_code(_PARSE_RUNNER, timeout=get_settings().agr_code_run_timeout_sec)
+        if pip_r.error:
+            raise RuntimeError(f"沙箱 pip install 失败：{pip_r.error}")
 
+        # 把真实路径以 Python 字面量注入到 runner 里
+        runner = _PARSE_RUNNER.replace("__UPLOAD_PATH__", repr(sandbox_path))
+        r = sb.run_code(runner, timeout=get_settings().agr_code_run_timeout_sec)
+
+    if r.error:
+        raise RuntimeError(f"沙箱 runner 异常：{r.error}")
     stdout = "\n".join(r.logs.stdout or [])
+    stderr = "\n".join(r.logs.stderr or [])
     if "__SKU_JSON_BEGIN__" not in stdout or "__SKU_JSON_END__" not in stdout:
-        raise RuntimeError(f"沙箱未返回标准 SKU JSON：stdout={stdout[:500]} stderr={r.logs.stderr}")
+        raise RuntimeError(
+            f"沙箱未返回标准 SKU JSON：stdout={stdout[:400]!r} stderr={stderr[:400]!r}"
+        )
     payload = stdout.split("__SKU_JSON_BEGIN__", 1)[1].split("__SKU_JSON_END__", 1)[0].strip()
     return json.loads(payload)
 
@@ -219,20 +236,30 @@ _SCORE_RUNNER = textwrap.dedent("""
 
 
 def _score_in_sandbox(skus: list[dict], trends: dict[str, float], sandbox_ids: list[str]) -> list[dict]:
+    # 用 repr() 把 JSON 字符串变成合法 Python 字符串字面量（自动处理引号转义）
+    skus_lit = repr(json.dumps(skus, ensure_ascii=False))
+    trends_lit = repr(json.dumps(trends, ensure_ascii=False))
     runner = (_SCORE_RUNNER
-              .replace("__SKUS_JSON__", repr(json.dumps(skus, ensure_ascii=False)))
-              .replace("__TRENDS_JSON__", repr(json.dumps(trends, ensure_ascii=False))))
+              .replace("__SKUS_JSON__", skus_lit)
+              .replace("__TRENDS_JSON__", trends_lit))
     with code_sandbox() as sb:
         sandbox_ids.append(sb.sandbox_id)
-        sb.run_code(
+        pip_r = sb.run_code(
             "import subprocess, sys; "
-            "subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', 'pandas'], check=True)"
+            "subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', 'pandas'], check=True); print('installed')"
         )
+        if pip_r.error:
+            raise RuntimeError(f"沙箱 pip install 失败：{pip_r.error}")
         r = sb.run_code(runner, timeout=get_settings().agr_code_run_timeout_sec)
 
+    if r.error:
+        raise RuntimeError(f"沙箱 score runner 异常：{r.error}")
     stdout = "\n".join(r.logs.stdout or [])
+    stderr = "\n".join(r.logs.stderr or [])
     if "__TOP_JSON_BEGIN__" not in stdout:
-        raise RuntimeError(f"沙箱未返回 TOP JSON：stdout={stdout[:500]} stderr={r.logs.stderr}")
+        raise RuntimeError(
+            f"沙箱未返回 TOP JSON：stdout={stdout[:400]!r} stderr={stderr[:400]!r}"
+        )
     payload = stdout.split("__TOP_JSON_BEGIN__", 1)[1].split("__TOP_JSON_END__", 1)[0].strip()
     return json.loads(payload)
 

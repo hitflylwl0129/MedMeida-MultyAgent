@@ -33,6 +33,12 @@ def _ensure_env() -> None:
     """把 .env 的 AGR 配置注入进程环境——e2b SDK 只从 env 读取。
 
     重复调用幂等。仅在 agr_enabled=true 且 api_key 非空时注入，否则保留环境原值。
+
+    附带做一件事：**禁用 e2b SDK 2.x 客户端对 API Key 格式的硬校验**。
+    e2b 2.x 的 `validate_api_key` 写死了正则 `\\Ae2b_[0-9a-f]+\\Z`，
+    而腾讯云 Agent Runtime 发的 Key 是 `ark_xxx` 前缀，会被客户端直接拒掉。
+    我们在调用前用 noop 替换这个函数，把校验交给真正的服务端来做。
+    （服务端域名走 E2B_DOMAIN=ap-guangzhou.tencentags.com，鉴权失败会从那边正常回 401。）
     """
     s = get_settings()
     if not s.agr_ready:
@@ -41,6 +47,20 @@ def _ensure_env() -> None:
         )
     os.environ["E2B_DOMAIN"] = s.e2b_domain
     os.environ["E2B_API_KEY"] = s.e2b_api_key
+
+    # 禁用 2.x 客户端硬正则校验（兼容腾讯云 ark_ 前缀 Key）
+    try:
+        from e2b import api as _e2b_api  # type: ignore
+
+        if getattr(_e2b_api, "validate_api_key", None) is not None and \
+                not getattr(_e2b_api.validate_api_key, "_agr_patched", False):
+            def _noop(_key: str) -> None:  # noqa: D401
+                return None
+            _noop._agr_patched = True  # type: ignore[attr-defined]
+            _e2b_api.validate_api_key = _noop  # type: ignore[assignment]
+            log.info("e2b.api.validate_api_key patched (allow ark_* keys for Tencent AGR)")
+    except Exception as e:  # noqa: BLE001
+        log.warning("patch e2b validate_api_key failed: %s", e)
 
 
 @contextmanager

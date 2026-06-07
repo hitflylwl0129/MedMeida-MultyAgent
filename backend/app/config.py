@@ -108,6 +108,22 @@ class Settings(BaseSettings):
     bili_upload_profile: str = "ugcfx/bup"
     bili_timeout_sec: int = 90
 
+    # ---- 腾讯云 Agent Runtime（选品 Agent 沙箱，E2B 协议）----
+    # 文档：https://cloud.tencent.com/document/product/1814
+    # 设计：编排留在本进程，仅"执行 LLM 生成代码 / 抓行情"借沙箱跑完即销毁。
+    agr_enabled: bool = False
+    e2b_domain: str = "ap-guangzhou.tencentags.com"
+    e2b_api_key: str = ""
+    agr_template_code: str = "code-medmedia-v1"
+    agr_template_browser: str = "browser-medmedia-v1"
+    agr_default_timeout_sec: int = 3600
+    agr_code_run_timeout_sec: int = 600
+
+    @property
+    def agr_ready(self) -> bool:
+        """选品 Agent 是否具备调用 AGR 的最小条件。"""
+        return bool(self.agr_enabled and self.e2b_api_key)
+
 
 
 

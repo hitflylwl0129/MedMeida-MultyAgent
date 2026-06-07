@@ -12,7 +12,7 @@ from typing import Optional
 
 from .config import get_settings
 from .orchestrator.graph import run_pipeline
-from .schemas import JobStatus, ProgressEvent, VideoJob
+from .schemas import JobStatus, ProductJob, ProgressEvent, VideoJob
 from . import store
 
 log = logging.getLogger("video-agent.worker")
@@ -101,4 +101,49 @@ async def start_job(
             emit(job, "st3")
 
     # 长任务丢到线程池，避免阻塞事件循环
+    asyncio.create_task(asyncio.to_thread(_run))
+
+
+# --------------------------------------------------------------------------- #
+# 选品 Agent v2.0：复用同一个 EventBus，但发布的是 ProductJob 进度
+# --------------------------------------------------------------------------- #
+def _make_product_emit():
+    def emit(job: ProductJob, stage: str) -> None:
+        store.save_product(job)
+        bus.publish(
+            ProgressEvent(
+                job_id=job.id,
+                status=job.status,
+                progress=job.progress,
+                message=job.message,
+                stage=stage,
+                data={
+                    "output": job.output.model_dump() if job.output else None,
+                    "sandbox_ids": job.sandbox_ids,
+                    "error": job.error,
+                },
+            )
+        )
+
+    return emit
+
+
+async def start_product_job(job: ProductJob) -> None:
+    """提交选品流水线。立即返回，进度走同一套 SSE 总线。"""
+    store.save_product(job)
+    emit = _make_product_emit()
+
+    # 延迟导入，避免循环依赖
+    from .agents.product_agent import run_product_pipeline
+
+    def _run() -> None:
+        try:
+            run_product_pipeline(job, emit)
+        except Exception as e:  # noqa: BLE001
+            log.exception("product pipeline 异常")
+            job.status = JobStatus.FAILED
+            job.error = str(e)
+            job.message = f"内部错误：{e}"
+            emit(job, "failed")
+
     asyncio.create_task(asyncio.to_thread(_run))

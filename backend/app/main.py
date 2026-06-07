@@ -99,6 +99,13 @@ async def health() -> JSONResponse:
             "default_doctor": s.default_doctor,
             "doctors_ready": ready_doctors,
             "doctors_total": len(catalog),
+            # —— 选品 Agent · 腾讯云 Agent Runtime —— #
+            "agent_runtime_ready": s.agr_ready,
+            "agr_domain": s.e2b_domain if s.agr_ready else "",
+            "agr_templates": (
+                {"code": s.agr_template_code, "browser": s.agr_template_browser}
+                if s.agr_ready else {}
+            ),
         }
     )
 

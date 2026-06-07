@@ -23,3 +23,10 @@ openai>=1.40
 PyJWT>=2.8
 requests>=2.31
 
+# 腾讯云 Agent Runtime（选品 Agent 沙箱，E2B 协议兼容）
+# 文档：https://cloud.tencent.com/document/product/1814
+e2b-code-interpreter>=1.0
+e2b>=1.0
+# 浏览器沙箱通过 CDP 远程操控（本端只装 SDK，chromium 跑在沙箱里，无需 install_browser）
+playwright>=1.45
+

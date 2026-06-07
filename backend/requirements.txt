@@ -5,6 +5,8 @@ sse-starlette>=2.1
 pydantic>=2.6
 pydantic-settings>=2.2
 python-dotenv>=1.0
+# FastAPI 处理 multipart/form-data（文件上传）必需，选品 Agent v2.0 销量表上传用
+python-multipart>=0.0.9
 
 # 编排状态机（Runtime 文档：单进程 LangGraph 起步）
 langgraph>=0.2.0

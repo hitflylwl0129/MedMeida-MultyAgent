@@ -81,6 +81,7 @@ async def health() -> JSONResponse:
         "motion": s.credentials_ready,
         "aigc": s.credentials_ready,
         "kling": kling_ready and bool(kling_public_base),
+        "tencent_avatar": s.tencent_avatar_ready and bool(s.public_base_url or kling_public_base),
     }.get(backend_mode, False)
     # 当前 backend 实际"生效模型"标识，避免和静态 aigc_model_name 混淆
     backend_model = {
@@ -88,6 +89,7 @@ async def health() -> JSONResponse:
         "motion": f"{s.motion_model_name}/{s.motion_model_version}/motion_control",
         "aigc": f"{s.aigc_model_name}/{s.aigc_model_version}/{s.aigc_scene_type}",
         "kling": f"Kling/{s.kling_image_model}/advanced-lip-sync",
+        "tencent_avatar": f"TencentCloud/Avatar/PhotoToVideoNoTrain/{s.tencent_avatar_resolution}",
     }.get(backend_mode, backend_mode)
     return JSONResponse(
         {
@@ -102,6 +104,9 @@ async def health() -> JSONResponse:
             "backend_ready": backend_ready,
             "kling_ready": kling_ready,
             "kling_public_base_url": kling_public_base,
+            # —— v1.3 引擎二：腾讯云数智人 —— #
+            "tencent_avatar_ready": s.tencent_avatar_ready,
+            "tencent_avatar_resolution": s.tencent_avatar_resolution if s.tencent_avatar_ready else "",
             # 形象库就绪即可生成（首帧来自本地素材库），兼容旧的 fileid/url 配置
             "doctor_image_ready": bool(
                 ready_doctors or s.doctor_image_fileid or s.doctor_image_url
@@ -153,7 +158,17 @@ async def doctor_image(key: str):
 @app.post("/api/video/jobs")
 async def create_job(req: CreateJobRequest) -> dict:
     s = get_settings()
-    if not s.credentials_ready:
+    # v1.3 引擎选择器：前端可传 video_backend 覆盖 .env 默认；
+    # tencent_avatar 引擎不依赖腾讯云 VOD 凭证，所以单独放行
+    chosen = (req.video_backend or "").strip().lower()
+    if chosen == "tencent_avatar":
+        if not s.tencent_avatar_ready:
+            raise HTTPException(
+                500, "数智人引擎未就绪：请配置 TENCENT_AVATAR_APP_KEY / ACCESS_TOKEN"
+            )
+    elif not s.credentials_ready:
+        # 其它（local/motion/aigc/kling）仍要腾讯云 VOD 凭证（TTS / motion / aigc 都用）
+        # kling 单独的 AK/SK 校验在 _generate_kling 内部
         raise HTTPException(500, "腾讯云密钥/SubAppId 未配置（backend/.env）")
 
     job = VideoJob(script=req.script)
@@ -163,6 +178,7 @@ async def create_job(req: CreateJobRequest) -> dict:
         doctor_key=req.doctor_key or "",
         doctor_file_id=req.doctor_image_fileid or "",
         doctor_url=req.doctor_image_url or "",
+        video_backend_override=chosen,
     )
     return {"job_id": job.id, "status": job.status}
 

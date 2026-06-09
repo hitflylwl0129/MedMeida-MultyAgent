@@ -144,3 +144,24 @@ def tts_voice_for_doctor(identifier: str, fallback: int = 602003) -> int:
     return _VOICE_BY_DOCTOR.get(d.key, fallback)
 
 
+# --------------------------- 数智人接口自带音色映射（v1.3 引擎二）--------------------------- #
+# 腾讯云数智人「照片免训练」接口 SpeechParam.TimbreKey 范围 male_1..male_20 / female_1..female_23
+# PoC 实测 female_1 听感优秀，先按性别 + 简单序号给个稳定映射；后续可叫"音色列表接口"扩展
+_AVATAR_TIMBRE_BY_DOCTOR: dict[str, str] = {
+    "senior_male":   "male_2",      # 留 male_1 给中年男（声音偏沉稳）
+    "senior_female": "female_2",
+    "middle_male":   "male_1",      # PoC A 组实测 male_1
+    "middle_female": "female_3",
+    "young_male":    "male_5",      # 偏年轻语感
+    "young_female":  "female_1",    # PoC C 组实测 female_1 听感好
+}
+
+
+def avatar_timbre_for_doctor(identifier: str, fallback: str = "male_1") -> str:
+    """按医生 key/中文名挑选数智人接口音色 key。未命中时回退到 fallback。"""
+    d = get_doctor(identifier)
+    if not d:
+        return fallback
+    return _AVATAR_TIMBRE_BY_DOCTOR.get(d.key, fallback)
+
+

@@ -106,6 +106,9 @@ class CreateJobRequest(BaseModel):
     # 可覆盖默认医生首帧；不传则用配置里的 DOCTOR_IMAGE_FILEID
     doctor_image_fileid: Optional[str] = None
     doctor_image_url: Optional[str] = None
+    # v1.3 引擎选择器：local / motion / aigc / kling / tencent_avatar
+    # 不传则用 .env 的全局默认 VIDEO_BACKEND
+    video_backend: Optional[str] = None
 
 
 # ---------- 话术 Agent ----------

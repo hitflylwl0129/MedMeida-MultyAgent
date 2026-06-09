@@ -84,6 +84,7 @@ async def start_job(
     doctor_key: str = "",
     doctor_file_id: str = "",
     doctor_url: str = "",
+    video_backend_override: str = "",
 ) -> None:
     """提交后台执行。立即返回，进度走 SSE。"""
     store.save(job)
@@ -92,7 +93,10 @@ async def start_job(
 
     def _run() -> None:
         try:
-            run_pipeline(job, settings, emit, doctor_key, doctor_file_id, doctor_url)
+            run_pipeline(
+                job, settings, emit, doctor_key, doctor_file_id, doctor_url,
+                video_backend_override=video_backend_override,
+            )
         except Exception as e:  # noqa: BLE001
             log.exception("pipeline 异常")
             job.status = JobStatus.FAILED

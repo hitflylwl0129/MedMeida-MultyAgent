@@ -122,6 +122,11 @@
           <div style="font-size:11px;color:var(--txt2);margin-bottom:6px">出镜形象库（avatar_i2v 首帧 · 点击切换）</div>
           <div id="docPicker" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px"></div>
         </div>
+        <!-- v1.3 引擎选择器：默认 Kling，可切换数智人 -->
+        <div id="enginePickerWrap" style="margin-top:10px;display:none">
+          <div style="font-size:11px;color:var(--txt2);margin-bottom:6px">视频引擎（点击切换）<span id="engineHint" style="margin-left:6px;font-size:10px;color:var(--txt3)"></span></div>
+          <div id="enginePicker" style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px"></div>
+        </div>
       </div>
       <div class="scard">
         <div class="hd"><div class="ic">🎯</div><div><h4>投放规格 / 人群</h4><p id="specSub">9:16 竖版</p></div></div>
@@ -465,6 +470,45 @@ function stageOn(stage){ if(stage&&document.getElementById(stage)) on(stage); }
 /* 医生形象库：从后端拉取 6 个人设，渲染缩略选择器，记录选中 key */
 let SELECTED_DOCTOR='';
 let DOCTORS=[];
+/* v1.3 引擎选择器：默认跟后端 video_backend；前端选中后覆盖 */
+let SELECTED_ENGINE='';          // 空 = 不覆盖，走 .env
+let BACKEND_DEFAULT_ENGINE='';   // 后端默认（仅展示用）
+let ENGINE_READY={};             // {kling:bool, tencent_avatar:bool, ...}
+const ENGINES=[
+  {key:'kling',          name:'可灵 Kling',     emoji:'🎬', desc:'高级对口型 · 默认'},
+  {key:'tencent_avatar', name:'腾讯云数智人',   emoji:'🤖', desc:'照片免训练 · 女声佳'},
+];
+function renderEnginePicker(){
+  const wrap=document.getElementById('enginePickerWrap');
+  const grid=document.getElementById('enginePicker');
+  const hint=document.getElementById('engineHint');
+  if(!wrap||!grid)return;
+  wrap.style.display='block';
+  hint.textContent = SELECTED_ENGINE ?
+    `当前选择 ${SELECTED_ENGINE}`
+    : `当前用后端默认（${BACKEND_DEFAULT_ENGINE||'kling'}）`;
+  grid.innerHTML=ENGINES.map(e=>{
+    const on = SELECTED_ENGINE === e.key
+            || (!SELECTED_ENGINE && BACKEND_DEFAULT_ENGINE === e.key);
+    const ready = ENGINE_READY[e.key] !== false;
+    const op = ready ? 1 : .35;
+    return `<div class="engpick" data-key="${e.key}" title="${e.name}"
+      style="cursor:${ready?'pointer':'not-allowed'};border:2px solid ${on?'var(--ok)':'transparent'};border-radius:10px;padding:8px;background:var(--panel);opacity:${op}">
+      <div style="font-size:18px">${e.emoji}</div>
+      <div style="font-size:11px;color:${on?'var(--ok)':'var(--txt2)'};margin-top:2px">${e.name}</div>
+      <div style="font-size:10px;color:var(--txt3);margin-top:2px">${e.desc}</div>
+      ${ready?'':'<div style="font-size:9px;color:var(--warn);margin-top:2px">未就绪</div>'}
+    </div>`;
+  }).join('');
+  grid.querySelectorAll('.engpick').forEach(el=>{
+    el.onclick=()=>{
+      const k=el.dataset.key;
+      if(ENGINE_READY[k]===false) return;
+      SELECTED_ENGINE = (SELECTED_ENGINE===k) ? '' : k;  // 再点一次取消选择回到默认
+      renderEnginePicker();
+    };
+  });
+}
 function renderDocPicker(){
   const wrap=document.getElementById('docPickerWrap');
   const grid=document.getElementById('docPicker');
@@ -497,6 +541,13 @@ async function loadDoctors(){
       SELECTED_DOCTOR=(h&&h.default_doctor)||(DOCTORS[0]&&DOCTORS[0].key)||'';
     }
     renderDocPicker();
+    // v1.3 引擎选择器初始化
+    BACKEND_DEFAULT_ENGINE = h.video_backend || 'kling';
+    ENGINE_READY = {
+      'kling':          !!h.kling_ready,
+      'tencent_avatar': !!h.tencent_avatar_ready,
+    };
+    renderEnginePicker();
   }catch(_){ /* 后端未启动则静默，保持 Mock 体验 */ }
 }
 
@@ -531,9 +582,11 @@ async function realRun(){
   // 创建任务
   let jobId='';
   try{
+    const payload = {script:SC, doctor_key:SELECTED_DOCTOR||undefined};
+    if(SELECTED_ENGINE) payload.video_backend = SELECTED_ENGINE;
     const resp=await fetch(BACKEND+'/api/video/jobs',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({script:SC, doctor_key:SELECTED_DOCTOR||undefined})
+      body:JSON.stringify(payload)
     }).then(r=>r.json());
     jobId=resp.job_id;
   }catch(e){

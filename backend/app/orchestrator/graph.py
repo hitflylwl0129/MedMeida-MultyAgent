@@ -26,7 +26,16 @@ from ..schemas import (
     VideoJob,
     VideoOutput,
 )
-from .. import composer, doctors as doctors_mod, kling_avatar, kling_base, motion_ref, tts, vod_client
+from .. import (
+    composer,
+    doctors as doctors_mod,
+    kling_avatar,
+    kling_base,
+    motion_ref,
+    tencent_avatar_pipeline,
+    tts,
+    vod_client,
+)
 from ..vod_upload import ensure_doctor_file_id
 
 log = logging.getLogger("video-agent.graph")
@@ -86,6 +95,8 @@ class GState(TypedDict, total=False):
     doctor_url: str
     emit: EmitFn
     failed: bool
+    # 前端引擎选择器：覆盖 .env 的 VIDEO_BACKEND（v1.3）
+    video_backend_override: str
 
 
 def _emit(state: GState, stage: str) -> None:
@@ -110,7 +121,10 @@ def node_generate(state: GState) -> GState:
     s = state["settings"]
     job.status = JobStatus.SUBMITTING
     job.progress = 25
-    backend_mode = (getattr(s, "video_backend", "") or "local").lower()
+    # 优先用前端"引擎覆盖"，没传则用 .env 的全局默认
+    backend_mode = (
+        (state.get("video_backend_override") or getattr(s, "video_backend", "") or "local")
+    ).lower()
     job.message = f"提交生视频任务（backend={backend_mode}）"
     _emit(state, "st3")
 
@@ -120,6 +134,8 @@ def node_generate(state: GState) -> GState:
         return _generate_motion(state)
     if backend_mode == "kling":
         return _generate_kling(state)
+    if backend_mode == "tencent_avatar":
+        return _generate_tencent_avatar(state)
     return _generate_aigc(state)
 
 
@@ -594,6 +610,73 @@ def _generate_kling(state: GState) -> GState:
     return state
 
 
+def _generate_tencent_avatar(state: GState) -> GState:
+    """v1.3 引擎二：腾讯云数智人「照片免训练」。
+
+    与 Kling 路 A 平级；产物落 backend/.cache/jobs/{id}/out.mp4，
+    output.url 走同款 /api/video/jobs/{id}/file（前端/分发零改动）。
+
+    详见 backend/app/tencent_avatar_pipeline.py 与调研报告。
+    """
+    job = state["job"]
+    s = state["settings"]
+    doctor_key = state.get("doctor_key") or s.default_doctor
+
+    doctor = doctors_mod.get_doctor(doctor_key) or doctors_mod.get_doctor(s.default_doctor)
+    if not doctor or not doctor.exists:
+        job.status = JobStatus.FAILED
+        job.error = f"医生形象图缺失：{doctor_key}"
+        job.message = job.error
+        state["failed"] = True
+        _emit(state, "st3")
+        return state
+
+    narration = (job.storyboard.narration if job.storyboard else "") or job.script.text
+
+    def _progress(pct: int, msg: str) -> None:
+        job.status = JobStatus.GENERATING
+        job.progress = pct
+        job.message = msg
+        _emit(state, "st3")
+
+    try:
+        result = tencent_avatar_pipeline.run(
+            settings=s,
+            doctor_key=doctor.key,
+            narration=narration,
+            storyboard=job.storyboard,
+            job_id=job.id,
+            progress=_progress,
+        )
+    except tencent_avatar_pipeline.PipelineError as e:
+        job.status = JobStatus.FAILED
+        job.error = str(e)
+        job.message = f"数智人引擎失败：{e}"
+        state["failed"] = True
+        _emit(state, "st3")
+        return state
+
+    # 任务 ID 标识引擎来源，便于事后溯源
+    job.task_id = f"tencent_avatar:{result['task_id']}"
+    base = (s.public_base_url or "").rstrip("/")
+    job.output = VideoOutput(
+        file_id="",
+        url=f"{base}/api/video/jobs/{job.id}/file",
+        cover_url=f"{base}/api/doctors/{doctor.key}/image",
+        duration_sec=result["duration_sec"],
+        width=result["width"],
+        height=result["height"],
+    )
+    job.progress = 92
+    job.message = (
+        f"成片生成完成（{result['duration_sec']:.1f}s · "
+        f"{result['width']}×{result['height']} · 腾讯云数智人）"
+    )
+    _prune_local_jobs(getattr(s, "local_keep_jobs", 20))
+    _emit(state, "st3")
+    return state
+
+
 def _generate_aigc(state: GState) -> GState:
     """原 AIGC 路径：调腾讯云 CreateAigcVideoTask（avatar_i2v，需要白名单）。
 
@@ -746,6 +829,7 @@ def run_pipeline(
     doctor_key: str = "",
     doctor_file_id: str = "",
     doctor_url: str = "",
+    video_backend_override: str = "",
 ) -> VideoJob:
     """同步执行整图（在 Worker 线程里调用）。"""
     state: GState = {
@@ -756,6 +840,7 @@ def run_pipeline(
         "doctor_file_id": doctor_file_id,
         "doctor_url": doctor_url,
         "failed": False,
+        "video_backend_override": video_backend_override or "",
     }
     result = get_graph().invoke(state)
     return result["job"]

@@ -507,6 +507,99 @@ def burn_captions_keep_audio(
     return out_path
 
 
+def burn_captions_to_aspect(
+    video_path: Path,
+    out_path: Path,
+    *,
+    audio_path: Path | None = None,
+    storyboard=None,
+    captions: Iterable[tuple[float, float, str]] | None = None,
+    target_w: int = VIDEO_W,
+    target_h: int = VIDEO_H,
+    fit_mode: str = "cover",
+) -> Path:
+    """烧字幕 + 规整到目标比例，支持 cover / pad 两种贴合策略。
+
+    用于「数智人」引擎：接口出的视频比例约 5:7.4（800×1184 / 1184×1760），需后处理到 9:16：
+      - fit_mode="cover"：先按短边等比放大覆盖目标，再中心裁切（推荐，无黑边）
+      - fit_mode="pad" ：保持原比例缩到目标内，剩余位置补黑边（不裁切，但有黑边）
+
+    v1.1 Kling 路径走的 burn_captions_keep_audio 默认 pad 行为不变，本函数仅供 v1.3 数智人路径使用。
+    """
+    video_path = Path(video_path)
+    out_path = Path(out_path)
+    if not video_path.is_file():
+        raise ComposerError(f"视频文件不存在：{video_path}")
+
+    total_sec = probe_duration(video_path)
+
+    if captions is not None:
+        cap_list = list(captions)
+    elif audio_path is not None:
+        cap_list = _captions_from_tts_segments(Path(audio_path))
+        if not cap_list:
+            cap_list = _captions_from_storyboard(storyboard)
+    else:
+        cap_list = _captions_from_storyboard(storyboard)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    burn_subs = _ffmpeg_has_filter("subtitles") and cap_list
+
+    if (fit_mode or "cover").lower() == "pad":
+        vf_chain = [
+            f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease",
+            f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2:color=black",
+        ]
+    else:
+        # cover：先放大到 short-side 覆盖目标，再中心裁切
+        vf_chain = [
+            f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase",
+            f"crop={target_w}:{target_h}",
+        ]
+    vf_chain.extend(["setsar=1", "format=yuv420p"])
+
+    if burn_subs:
+        ass_path = out_path.parent / (out_path.stem + ".ass")
+        ass_path.write_text(_build_ass(cap_list, total_sec), encoding="utf-8")
+        ass_arg = (
+            str(ass_path)
+            .replace("\\", "\\\\")
+            .replace(":", r"\:")
+            .replace("'", r"\\\\'")
+            .replace(",", r"\,")
+            .replace("[", r"\[")
+            .replace("]", r"\]")
+        )
+        vf_chain.append(f"subtitles=filename={ass_arg}")
+    else:
+        log.info("burn_captions_to_aspect 跳过字幕（缺 subtitles 或无字幕条目）")
+
+    vf = ",".join(vf_chain)
+    cmd = [
+        _ffmpeg_bin(), "-y", "-loglevel", "error",
+        "-i", str(video_path),
+        "-vf", vf,
+        "-r", "30",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+        "-map", "0:v:0", "-map", "0:a:0?",
+        "-movflags", "+faststart",
+        str(out_path),
+    ]
+    log.info("ffmpeg burn_to_aspect[%s]: %s %dx%d -> %s",
+             fit_mode, video_path.name, target_w, target_h, out_path.name)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+    except subprocess.CalledProcessError as e:
+        raise ComposerError(
+            f"ffmpeg 烧字幕/规整失败：{e.stderr.decode('utf-8', 'ignore')[-800:]}"
+        ) from e
+    log.info("burn_captions_to_aspect 完成 size=%dB -> %s",
+             out_path.stat().st_size, out_path)
+    return out_path
+
+
 def download_to(url: str, out_path: Path, timeout: float = 120.0) -> Path:
     """把远程 URL 流式下载到本地（motion_control 成片是临时 URL，要尽早落地）。"""
     import urllib.request

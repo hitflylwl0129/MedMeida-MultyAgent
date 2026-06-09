@@ -65,6 +65,32 @@ class Settings(BaseSettings):
     # 注意：identify-face 需要从公网拉取我们暴露的基础视频，必须是可灵可达的绝对地址。
     kling_public_base_url: str = ""
 
+    # ---- 腾讯云数智人「照片免训练」（v1.3 引擎二）---- #
+    # 文档：https://cloud.tencent.com/document/product/1240/118475
+    # 鉴权：HMAC-SHA256(AccessToken, sorted_query) → Base64 → URLEncode（全部在 URL Query）
+    # 详见调研报告：腾讯云数智人照片免训练_调研.md
+    tencent_avatar_app_key: str = ""
+    tencent_avatar_access_token: str = ""
+    # 文本驱动的默认音色（不同医生在 doctors.tts_voice_for_doctor_avatar 里做映射）
+    tencent_avatar_default_timbre: str = "male_1"
+    # 接口 TTS 实测比 v1.1 Kling 慢 ~31%（17s 文本读 22s），用 1.2 抵消
+    tencent_avatar_speech_speed: float = 1.2
+    # 分辨率档位："720P" / "1080P"（内部转 int 0/1）
+    tencent_avatar_resolution: str = "720P"
+    # 提交 / 轮询参数
+    tencent_avatar_poll_interval_sec: int = 8
+    tencent_avatar_poll_timeout_sec: int = 900   # 17s 话术约 5-6 分钟，15 分钟兜底
+    # 试用账号并发=1，遇到 100008 时重试（任务可能已入队）
+    tencent_avatar_submit_retries: int = 6
+    tencent_avatar_submit_retry_interval_sec: int = 30
+    # 输出比例 5:7.4 → 后处理到 9:16（cover 中心裁切 / pad 上下补黑）
+    tencent_avatar_target_aspect: str = "9:16"
+    tencent_avatar_fit_mode: str = "cover"   # cover=中心裁切（推荐）| pad=补黑边
+
+    @property
+    def tencent_avatar_ready(self) -> bool:
+        return bool(self.tencent_avatar_app_key and self.tencent_avatar_access_token)
+
     # ---- motion_control 默认参数 ----
     motion_ref_filename: str = "ref.mp4"   # 参考动作视频文件名（位于 backend/assets/motion_ref/）
     motion_model_name: str = "Kling"

@@ -96,6 +96,39 @@
   .floader{position:absolute;inset:0;display:grid;place-items:center;color:var(--txt3);font-size:13px;pointer-events:none;opacity:0;transition:.2s}
   .floader.show{opacity:1}
 </style>
+<script>
+/* ===== 主题切换（A/B/C/D） =====
+   优先级：URL ?theme= > localStorage > 默认 A
+   早注入，在样式渲染前覆盖 :root 变量，避免切换瞬间闪烁。 */
+(function(){
+  const THEMES={
+    A:{ /* 钴蓝深空 · 默认 */
+      '--bg':'#141826','--panel':'#1c2236','--panel2':'#252c44','--line':'#3a4262','--chip':'#2b3454'},
+    B:{ /* 暖石板灰 · 中性现代 */
+      '--bg':'#1a1c22','--panel':'#23262e','--panel2':'#2c3038','--line':'#3a3f4a','--chip':'#353a45'},
+    C:{ /* 墨绿青调 · 医药联想 */
+      '--bg':'#131a1e','--panel':'#1b242a','--panel2':'#222d34','--line':'#324048','--chip':'#2a3640'},
+    D:{ /* 紫调暗夜 · 创意营销 */
+      '--bg':'#16121f','--panel':'#1e1a2c','--panel2':'#272336','--line':'#3a3450','--chip':'#2e2842'},
+    Z:{ /* 原始（已废，留作回退对比） */
+      '--bg':'#0f1117','--panel':'#171a23','--panel2':'#1d212c','--line':'#2a2f3d','--chip':'#222736'},
+  };
+  const url=new URLSearchParams(location.search);
+  let key=(url.get('theme')||'').toUpperCase();
+  if(!THEMES[key]){
+    try{ key=(localStorage.getItem('app_theme')||'').toUpperCase(); }catch(e){}
+  }
+  if(!THEMES[key]) key='A';
+  try{ localStorage.setItem('app_theme',key); }catch(e){}
+  window.__APP_THEME__=key;
+  window.__APP_THEMES__=THEMES;
+  // 用 <style> 注入更高优先级，覆盖 :root 默认值
+  const s=document.createElement('style');
+  s.id='__theme_override__';
+  s.textContent=':root{'+Object.entries(THEMES[key]).map(([k,v])=>k+':'+v+';').join('')+'}';
+  document.head.appendChild(s);
+})();
+</script>
 </head>
 <body>
   <!-- ===== 左侧栏 ===== -->
@@ -370,6 +403,75 @@ renderHistory();
 /* 子页产出变化时刷新流程徽标与历史列表 */
 window.addEventListener('focus',()=>{renderFlow(curId);renderHistory();});
 setInterval(()=>{renderFlow(curId);renderHistory();},2500);
+
+/* ===== 右下角主题切换器（4 套配色） ===== */
+(function(){
+  const THEMES = window.__APP_THEMES__ || {};
+  const META = {
+    A:{ic:'🔷', name:'钴蓝深空',  hint:'冷色 · 商务专业'},
+    B:{ic:'⬛', name:'暖石板灰',  hint:'中性 · 现代'},
+    C:{ic:'🟢', name:'墨绿青调',  hint:'青绿 · 医药联想'},
+    D:{ic:'🟣', name:'紫调暗夜',  hint:'紫调 · 创意营销'},
+    Z:{ic:'⚫', name:'原始全黑',  hint:'对比基线'},
+  };
+  const cur = window.__APP_THEME__ || 'A';
+  const wrap = document.createElement('div');
+  wrap.id = '__theme_picker__';
+  wrap.style.cssText = `
+    position:fixed;right:18px;bottom:18px;z-index:9999;
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:10px 12px;display:flex;flex-direction:column;gap:8px;
+    box-shadow:0 8px 24px rgba(0,0,0,.45);font-family:inherit;`;
+  wrap.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div style="font-size:11px;color:var(--txt2);user-select:none">🎨 配色试装</div>
+      <div id="__theme_close__" style="cursor:pointer;color:var(--txt3);font-size:14px;line-height:1" title="折叠">×</div>
+    </div>
+    <div id="__theme_chips__" style="display:flex;gap:6px"></div>
+    <div id="__theme_label__" style="font-size:11px;color:var(--txt2);min-height:14px"></div>`;
+  document.body.appendChild(wrap);
+
+  const chips = wrap.querySelector('#__theme_chips__');
+  const label = wrap.querySelector('#__theme_label__');
+  Object.keys(META).forEach(k=>{
+    if(!THEMES[k]) return;
+    const m = META[k];
+    const bg = THEMES[k]['--panel2'] || '#222';
+    const bd = THEMES[k]['--line']  || '#444';
+    const on = (k===cur);
+    const btn = document.createElement('button');
+    btn.dataset.key = k;
+    btn.title = `${m.name} · ${m.hint}`;
+    btn.style.cssText = `
+      width:32px;height:32px;border-radius:9px;cursor:pointer;
+      background:${bg};border:2px solid ${on?'#4f7cff':bd};
+      display:grid;place-items:center;font-size:14px;line-height:1;
+      transition:.15s;color:#fff;padding:0;outline:none`;
+    btn.innerHTML = `<span style="font-weight:700">${k}</span>`;
+    if(on){ btn.style.boxShadow = '0 0 0 3px rgba(79,124,255,.25)'; }
+    btn.onmouseenter = ()=>{ label.textContent = `${m.name} · ${m.hint}`; };
+    btn.onclick = ()=>{
+      try{ localStorage.setItem('app_theme', k); }catch(e){}
+      // 走 URL 参数同步，便于复制链接给同事看
+      const u = new URL(location.href);
+      u.searchParams.set('theme', k);
+      location.replace(u.toString());
+    };
+    chips.appendChild(btn);
+  });
+  const m = META[cur] || META.A;
+  label.textContent = `当前：${m.name} · ${m.hint}`;
+
+  // 折叠/展开
+  let collapsed = false;
+  const closeBtn = wrap.querySelector('#__theme_close__');
+  closeBtn.onclick = ()=>{
+    collapsed = !collapsed;
+    chips.style.display = label.style.display = collapsed ? 'none' : '';
+    closeBtn.textContent = collapsed ? '＋' : '×';
+    closeBtn.title = collapsed ? '展开' : '折叠';
+  };
+})();
 </script>
 </body>
 </html>

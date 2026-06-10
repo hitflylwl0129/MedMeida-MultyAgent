@@ -73,14 +73,14 @@
   .flowbar{flex-shrink:0;background:var(--panel);border-bottom:1px solid var(--line);padding:14px 18px;display:flex;align-items:center;gap:0;overflow-x:auto}
   .flowbar::-webkit-scrollbar{height:6px}
   .flowbar::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px}
-  .step{flex-shrink:0;display:flex;align-items:center;gap:9px;padding:9px 15px;border-radius:11px;background:var(--panel2);border:1.5px solid var(--line);color:var(--txt2);cursor:pointer;transition:.18s;white-space:nowrap;position:relative}
-  .step:hover{border-color:rgba(79,124,255,.55);color:var(--txt)}
+  .step{flex-shrink:0;display:flex;align-items:center;gap:9px;padding:9px 15px;border-radius:11px;background:var(--panel2);border:1.5px solid var(--line);color:var(--txt);cursor:pointer;transition:.18s;white-space:nowrap;position:relative}
+  .step:hover{border-color:rgba(79,124,255,.55);color:#fff;background:#232838}
   .step.active{background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:transparent;color:#fff;box-shadow:0 4px 16px rgba(79,124,255,.35)}
   .step .si{width:24px;height:24px;border-radius:7px;background:rgba(255,255,255,.08);display:grid;place-items:center;font-size:14px;flex-shrink:0}
   .step.active .si{background:rgba(255,255,255,.2)}
   .step .sl{display:flex;flex-direction:column;line-height:1.25}
   .step .sl b{font-size:13px;font-weight:600}
-  .step .sl span{font-size:10px;opacity:.72}
+  .step .sl span{font-size:10px;opacity:.85}
   .step .done{position:absolute;top:-6px;right:-6px;width:17px;height:17px;border-radius:50%;background:var(--ok);color:#06281c;font-size:11px;font-weight:700;display:none;place-items:center;border:2px solid var(--panel)}
   .step.ok .done{display:grid}
   .step.locked{cursor:not-allowed;opacity:.42;filter:saturate(.4)}

@@ -101,10 +101,10 @@ _PARSE_RUNNER = textwrap.dedent("""
                     return c
         return None
 
-    col_name  = _find(["产品", "品名", "SKU", "商品", "名称"])
-    col_qty   = _find(["销量", "销售量", "数量", "件数"])
-    col_amt   = _find(["金额", "销售额", "营收", "收入"])
-    col_dept  = _find(["科室", "类别", "分类"])
+    col_name  = _find(["产品", "品名", "SKU", "商品", "名称", "药品", "产品名", "商品名"])
+    col_qty   = _find(["销量", "销售量", "数量", "件数", "盒数", "支数", "瓶数", "qty", "sales", "volume"])
+    col_amt   = _find(["金额", "销售额", "营收", "收入", "GMV", "成交", "总额", "amount", "revenue"])
+    col_dept  = _find(["科室", "类别", "分类", "品类", "类目", "department"])
 
     summary = {
         "rows": int(len(df)),
@@ -215,16 +215,32 @@ _SCORE_RUNNER = textwrap.dedent("""
     trends = json.loads(__TRENDS_JSON__)
 
     df = pd.DataFrame(skus)
-    # 归一化 qty / amt（避免量纲拉爆）
+    # 调试可观测：打印实际拿到的列，下次踩坑能立刻定位
+    print("__DEBUG__cols:", list(df.columns))
+
+    # 归一化 qty / amt（避免量纲拉爆）。
+    # 注意：df.get(col, default) 当列缺失时返回 default 原值（int 0），不是 Series；
+    # 因此这里显式分支取 Series，避免 'int' object has no attribute 'fillna'。
     def _norm(s):
         s = pd.to_numeric(s, errors="coerce").fillna(0)
         if s.max() == s.min():
             return s * 0 + 0.5
         return (s - s.min()) / (s.max() - s.min())
 
-    sales = _norm(df.get("amt", df.get("qty", 0)))
+    if "amt" in df.columns:
+        sales_src = df["amt"]
+    elif "qty" in df.columns:
+        sales_src = df["qty"]
+    else:
+        # 完全没有量化列：销售分全部 0.5（纯靠 trend_score 区分）
+        sales_src = pd.Series([0.5] * len(df))
+
+    sales = _norm(sales_src)
     df["sales_score"] = sales.round(3)
-    df["trend_score"] = df["name"].map(trends).fillna(0.5).round(3)
+    if "name" in df.columns:
+        df["trend_score"] = df["name"].map(trends).fillna(0.5).round(3)
+    else:
+        df["trend_score"] = 0.5
     # 加权：销量 0.7 + 趋势 0.3
     df["final_score"] = (df["sales_score"] * 0.7 + df["trend_score"] * 0.3).round(3)
 

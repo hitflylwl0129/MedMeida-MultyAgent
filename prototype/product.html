@@ -74,11 +74,18 @@
   .sbtl-head .meta b{color:var(--txt2)}
   .sbtl-axis{position:relative;height:18px;margin-bottom:4px;border-bottom:1px dashed var(--line)}
   .sbtl-tick{position:absolute;top:0;height:18px;border-left:1px dotted var(--line);font-size:9px;color:var(--txt3);padding-left:3px;line-height:14px}
-  .sbtl-row{position:relative;height:26px;margin-bottom:6px}
+  /* 每个沙箱占两行：色带 + 时间戳细节 */
+  .sbtl-row{position:relative;height:46px;margin-bottom:6px}
   .sbtl-label{position:absolute;left:0;top:0;width:130px;font-size:11px;color:var(--txt2);padding-top:6px;font-family:ui-monospace,Menlo,monospace}
-  .sbtl-track{position:absolute;left:140px;right:0;top:0;bottom:0;background:rgba(255,255,255,.02);border-radius:5px}
+  .sbtl-track{position:absolute;left:140px;right:0;top:0;height:26px;background:rgba(255,255,255,.02);border-radius:5px}
   .sbtl-bar{position:absolute;top:3px;bottom:3px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px;cursor:default;transition:.18s;min-width:4px}
   .sbtl-bar:hover{filter:brightness(1.15);box-shadow:0 0 0 2px rgba(255,255,255,.18)}
+  /* 卡片下方的时间戳行：左侧紧贴 label，文本左对齐 */
+  .sbtl-detail{position:absolute;left:140px;right:0;top:28px;font-size:10px;color:var(--txt3);font-family:ui-monospace,Menlo,monospace;line-height:1.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sbtl-detail .ts{color:var(--txt2)}
+  .sbtl-detail .arr{color:var(--txt3);margin:0 4px}
+  .sbtl-detail .sid{color:var(--txt3);margin-left:8px}
+  .sbtl-detail .dur{color:#9fe;margin-left:8px}
   .sbtl-bar.parse_excel{background:linear-gradient(90deg,#22c08b,#1aa074)}
   .sbtl-bar.score      {background:linear-gradient(90deg,#4f7cff,#3a5dd9)}
   .sbtl-bar.browser    {background:linear-gradient(90deg,#7a5cff,#5e44c9)}
@@ -367,11 +374,12 @@ function drawTimeline(events, body, meta, isFinal){
   const min = Math.min(...events.map(e => e.created_ts));
   const max = Math.max(...events.map(e => e.killed_ts));
   const span = Math.max(max - min, 1);   // 防 0 除
-  // 标签格式：相对秒
+  // 标签格式：相对秒 / 绝对时间（含毫秒 2 位）
   const fmtRel = ts => '+' + (ts - min).toFixed(1) + 's';
   const fmtAbs = ts => {
     const d = new Date(ts * 1000);
-    return d.toLocaleTimeString('zh-CN', {hour12:false}) + '.' + String(d.getMilliseconds()).padStart(3,'0').slice(0,2);
+    return d.toLocaleTimeString('zh-CN', {hour12:false}) + '.' +
+           String(d.getMilliseconds()).padStart(3,'0').slice(0,2);
   };
   // 总时长 / 沙箱并发判断（任何一条事件区间与另一条重叠 → 并发）
   let concurrent = false;
@@ -386,11 +394,13 @@ function drawTimeline(events, body, meta, isFinal){
   }
   const totalDur = events.reduce((s,e) => s + (e.duration_sec||0), 0);
   const wallDur  = span;
-  meta.innerHTML = '<b>沙箱数</b>:' + events.length +
-                   ' &nbsp;<b>累计运行</b>:' + totalDur.toFixed(2) + 's' +
-                   ' &nbsp;<b>挂钟时长</b>:' + wallDur.toFixed(2) + 's' +
-                   ' &nbsp;<b>并发</b>:' + (concurrent ? '是 ⚠' : '否（串行）') +
-                   (isFinal ? '' : ' &nbsp;<span style="color:var(--warn)">● 进行中</span>');
+  meta.innerHTML =
+    '<b>起点</b>:' + fmtAbs(min) +
+    ' &nbsp;<b>沙箱数</b>:' + events.length +
+    ' &nbsp;<b>累计运行</b>:' + totalDur.toFixed(2) + 's' +
+    ' &nbsp;<b>挂钟时长</b>:' + wallDur.toFixed(2) + 's' +
+    ' &nbsp;<b>并发</b>:' + (concurrent ? '是 ⚠' : '否（串行）') +
+    (isFinal ? '' : ' &nbsp;<span style="color:var(--warn)">● 进行中</span>');
 
   // 渲染时间轴刻度（5 等分）
   let html = '<div class="sbtl-axis">';
@@ -400,7 +410,7 @@ function drawTimeline(events, body, meta, isFinal){
     html += '<div class="sbtl-tick" style="left:calc(140px + (100% - 140px) * ' + (pct/100) + ')">' + fmtRel(t) + '</div>';
   }
   html += '</div>';
-  // 每个 sandbox 一行
+  // 每个 sandbox 一行（46px 高：色带 26px + 时间戳详情 20px）
   events.forEach((e, i) => {
     const left  = ((e.created_ts - min) / span) * 100;
     const width = Math.max(((e.killed_ts - e.created_ts) / span) * 100, 0.5);
@@ -408,12 +418,15 @@ function drawTimeline(events, body, meta, isFinal){
                      e._running ? 'running' : 'other';
     const sid = e.sandbox_id || '';
     const sidShort = sid ? sid.slice(0,6) + '…' + sid.slice(-4) : '?';
+    const tCreated = e.created_at || fmtAbs(e.created_ts);
+    const tKilled  = e.killed_at  || fmtAbs(e.killed_ts);
+    // 悬停 tooltip 仍保留完整信息（适合 sandbox_id 复制查询）
     const title = [
       'sandbox_id: ' + sid,
       'kind: ' + (e.kind || '?'),
       'stage: ' + (e.stage || '?'),
-      'created_at: ' + (e.created_at || fmtAbs(e.created_ts)),
-      'killed_at: '  + (e.killed_at  || fmtAbs(e.killed_ts)),
+      'created_at: ' + tCreated,
+      'killed_at: '  + tKilled,
       'duration: '   + (e.duration_sec || 0).toFixed(2) + 's',
       'status: '     + (e.status || (e._running ? 'running(推断)' : 'ok')),
     ].join('\n');
@@ -425,6 +438,14 @@ function drawTimeline(events, body, meta, isFinal){
                   'title="' + title.replace(/"/g,'&quot;') + '">' +
                   sidShort + ' · ' + (e.duration_sec||0).toFixed(1) + 's' +
                 '</div>' +
+              '</div>' +
+              // 卡片下方的时间戳详情行
+              '<div class="sbtl-detail" title="' + title.replace(/"/g,'&quot;') + '">' +
+                '<span class="ts">⌚ ' + tCreated + '</span>' +
+                '<span class="arr">→</span>' +
+                '<span class="ts">' + tKilled + '</span>' +
+                '<span class="dur">' + (e.duration_sec||0).toFixed(2) + 's</span>' +
+                '<span class="sid">· ' + (sid || 'unknown') + '</span>' +
               '</div>' +
             '</div>';
   });

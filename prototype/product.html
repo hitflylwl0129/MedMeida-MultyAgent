@@ -67,6 +67,28 @@
   .sblog .k{color:#9fe}
   .sblog .v{color:#ffd9a0}
 
+  /* 沙箱执行轨迹（v1.2.1+ 可视化）*/
+  .sbtl{margin-top:10px;background:#0a0c12;border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+  .sbtl-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:11.5px;color:var(--txt2)}
+  .sbtl-head .meta{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--txt3)}
+  .sbtl-head .meta b{color:var(--txt2)}
+  .sbtl-axis{position:relative;height:18px;margin-bottom:4px;border-bottom:1px dashed var(--line)}
+  .sbtl-tick{position:absolute;top:0;height:18px;border-left:1px dotted var(--line);font-size:9px;color:var(--txt3);padding-left:3px;line-height:14px}
+  .sbtl-row{position:relative;height:26px;margin-bottom:6px}
+  .sbtl-label{position:absolute;left:0;top:0;width:130px;font-size:11px;color:var(--txt2);padding-top:6px;font-family:ui-monospace,Menlo,monospace}
+  .sbtl-track{position:absolute;left:140px;right:0;top:0;bottom:0;background:rgba(255,255,255,.02);border-radius:5px}
+  .sbtl-bar{position:absolute;top:3px;bottom:3px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px;cursor:default;transition:.18s;min-width:4px}
+  .sbtl-bar:hover{filter:brightness(1.15);box-shadow:0 0 0 2px rgba(255,255,255,.18)}
+  .sbtl-bar.parse_excel{background:linear-gradient(90deg,#22c08b,#1aa074)}
+  .sbtl-bar.score      {background:linear-gradient(90deg,#4f7cff,#3a5dd9)}
+  .sbtl-bar.browser    {background:linear-gradient(90deg,#7a5cff,#5e44c9)}
+  .sbtl-bar.other      {background:linear-gradient(90deg,#6b7382,#4e5564)}
+  .sbtl-bar.running    {background:linear-gradient(90deg,#f0a93b,#d18b1a);animation:pulse 1.5s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+  .sbtl-empty{font-size:11px;color:var(--txt3);padding:8px 0;font-family:ui-monospace,Menlo,monospace}
+  .sbtl-legend{display:flex;gap:14px;font-size:10.5px;color:var(--txt3);margin-top:8px;flex-wrap:wrap}
+  .sbtl-legend .dot{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:middle;margin-right:4px}
+
   /* 结果区 */
   #result{display:none}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:10px}
@@ -142,6 +164,25 @@
       <div class="step" data-st="st5"><div class="ic">🤖</div><div class="info"><b>⑤ LLM 汇总推荐理由</b><div class="msg">补全 dept/risk/chips/rationale</div></div><div class="ms"></div></div>
     </div>
     <div class="sblog" id="sblog">等待沙箱实例创建…</div>
+
+    <!-- 沙箱执行轨迹（v1.2.1）：实时显示每个沙箱的创建-销毁时间线 -->
+    <div class="sbtl" id="sbtl">
+      <div class="sbtl-head">
+        <div>🧊 沙箱执行轨迹（Cube 微虚机生命周期）</div>
+        <div class="meta" id="sbtlMeta">等待 job 启动…</div>
+      </div>
+      <div id="sbtlBody">
+        <div class="sbtl-empty">尚无沙箱事件。任务启动后这里会实时渲染每个沙箱的创建-销毁时间线。</div>
+      </div>
+      <div class="sbtl-legend">
+        <span><span class="dot" style="background:linear-gradient(90deg,#22c08b,#1aa074)"></span>parse_excel</span>
+        <span><span class="dot" style="background:linear-gradient(90deg,#4f7cff,#3a5dd9)"></span>score</span>
+        <span><span class="dot" style="background:linear-gradient(90deg,#7a5cff,#5e44c9)"></span>browser</span>
+        <span><span class="dot" style="background:linear-gradient(90deg,#f0a93b,#d18b1a)"></span>running（推断中）</span>
+        <span style="color:var(--txt3)">悬停查看 sandbox_id / 起止时间</span>
+      </div>
+    </div>
+
     <div class="err" id="errBox"></div>
   </div>
 
@@ -223,6 +264,11 @@ runBtn.onclick = async () => {
   document.getElementById('errBox').style.display = 'none';
   document.querySelectorAll('.step').forEach(el => el.classList.remove('on','ok','err'));
   document.getElementById('sblog').innerHTML = '等待沙箱实例创建…';
+  // 重置沙箱执行轨迹面板
+  document.getElementById('sbtlBody').innerHTML =
+    '<div class="sbtl-empty">沙箱准备中…</div>';
+  document.getElementById('sbtlMeta').textContent = '等待 job 启动…';
+  stopSandboxPolling();
   stTimes = {};
 
   try{
@@ -253,6 +299,9 @@ function subscribe(jid){
     onProgress(ev);
     if(ev.status === 'done' || ev.status === 'failed'){
       es.close();
+      stopSandboxPolling();
+      // 终态再拉一次，确保拿到最后一个沙箱的 killed 事件
+      fetchAndRenderSandboxes(jid, /*final*/ true);
       if(ev.status === 'done'){
         renderResult(ev.data && ev.data.output);
       } else {
@@ -261,7 +310,125 @@ function subscribe(jid){
       }
     }
   });
-  es.onerror = () => { es.close(); };
+  es.onerror = () => { es.close(); stopSandboxPolling(); };
+  // 同步开沙箱事件轮询（3 秒一次，与 SSE 互补：SSE 推业务进度，这条拉沙箱生命周期）
+  startSandboxPolling(jid);
+}
+
+/* ===== 沙箱执行轨迹（实时拉 /api/product/jobs/{id}/sandboxes 渲染） ===== */
+let sbPollTimer = null;
+let sbJobStartTs = 0;        // 本次 job 在前端开始的时间戳（用于"running 推断态"的 fallback）
+function startSandboxPolling(jid){
+  stopSandboxPolling();
+  sbJobStartTs = Date.now() / 1000;
+  fetchAndRenderSandboxes(jid, false);
+  sbPollTimer = setInterval(() => fetchAndRenderSandboxes(jid, false), 3000);
+}
+function stopSandboxPolling(){
+  if(sbPollTimer){ clearInterval(sbPollTimer); sbPollTimer = null; }
+}
+async function fetchAndRenderSandboxes(jid, isFinal){
+  try{
+    const r = await fetch(BACKEND + '/api/product/jobs/' + jid + '/sandboxes');
+    if(!r.ok) return;
+    const j = await r.json();
+    renderSandboxTimeline(j, isFinal);
+  }catch(_){ /* 静默重试 */ }
+}
+function renderSandboxTimeline(data, isFinal){
+  const body = document.getElementById('sbtlBody');
+  const meta = document.getElementById('sbtlMeta');
+  const events = (data && data.events) || [];
+  const ids    = (data && data.sandbox_ids) || [];
+
+  // 没有 events：根据 sandbox_ids 推断一个"running"占位条（业务才开始时端口还没收尾，sandbox 已经在跑）
+  if(!events.length){
+    if(!ids.length){
+      body.innerHTML = '<div class="sbtl-empty">沙箱准备中…（SSE 已开始，但尚未有完整生命周期事件入库）</div>';
+      meta.textContent = '等待沙箱启动';
+      return;
+    }
+    // 有 sandbox_ids 但还没 killed_at → 渲染推断 running 条
+    const startTs = sbJobStartTs || (Date.now()/1000);
+    const nowTs   = Date.now()/1000;
+    const ghosts = ids.map((id,i) => ({
+      sandbox_id:id, kind:'code', stage:'running',
+      created_ts:startTs, killed_ts:nowTs,
+      duration_sec: +(nowTs-startTs).toFixed(2),
+      _running:true,
+    }));
+    drawTimeline(ghosts, body, meta, isFinal);
+    return;
+  }
+  drawTimeline(events, body, meta, isFinal);
+}
+function drawTimeline(events, body, meta, isFinal){
+  // 时间轴：min = 第一条 created_ts，max = 最后一条 killed_ts（或 now）
+  const min = Math.min(...events.map(e => e.created_ts));
+  const max = Math.max(...events.map(e => e.killed_ts));
+  const span = Math.max(max - min, 1);   // 防 0 除
+  // 标签格式：相对秒
+  const fmtRel = ts => '+' + (ts - min).toFixed(1) + 's';
+  const fmtAbs = ts => {
+    const d = new Date(ts * 1000);
+    return d.toLocaleTimeString('zh-CN', {hour12:false}) + '.' + String(d.getMilliseconds()).padStart(3,'0').slice(0,2);
+  };
+  // 总时长 / 沙箱并发判断（任何一条事件区间与另一条重叠 → 并发）
+  let concurrent = false;
+  for(let i = 0; i < events.length; i++){
+    for(let j = i+1; j < events.length; j++){
+      const a = events[i], b = events[j];
+      if(a.created_ts < b.killed_ts && b.created_ts < a.killed_ts){
+        concurrent = true; break;
+      }
+    }
+    if(concurrent) break;
+  }
+  const totalDur = events.reduce((s,e) => s + (e.duration_sec||0), 0);
+  const wallDur  = span;
+  meta.innerHTML = '<b>沙箱数</b>:' + events.length +
+                   ' &nbsp;<b>累计运行</b>:' + totalDur.toFixed(2) + 's' +
+                   ' &nbsp;<b>挂钟时长</b>:' + wallDur.toFixed(2) + 's' +
+                   ' &nbsp;<b>并发</b>:' + (concurrent ? '是 ⚠' : '否（串行）') +
+                   (isFinal ? '' : ' &nbsp;<span style="color:var(--warn)">● 进行中</span>');
+
+  // 渲染时间轴刻度（5 等分）
+  let html = '<div class="sbtl-axis">';
+  for(let k = 0; k <= 5; k++){
+    const pct = (k / 5) * 100;
+    const t = min + span * (k / 5);
+    html += '<div class="sbtl-tick" style="left:calc(140px + (100% - 140px) * ' + (pct/100) + ')">' + fmtRel(t) + '</div>';
+  }
+  html += '</div>';
+  // 每个 sandbox 一行
+  events.forEach((e, i) => {
+    const left  = ((e.created_ts - min) / span) * 100;
+    const width = Math.max(((e.killed_ts - e.created_ts) / span) * 100, 0.5);
+    const stageCls = ['parse_excel','score','browser'].includes(e.stage) ? e.stage :
+                     e._running ? 'running' : 'other';
+    const sid = e.sandbox_id || '';
+    const sidShort = sid ? sid.slice(0,6) + '…' + sid.slice(-4) : '?';
+    const title = [
+      'sandbox_id: ' + sid,
+      'kind: ' + (e.kind || '?'),
+      'stage: ' + (e.stage || '?'),
+      'created_at: ' + (e.created_at || fmtAbs(e.created_ts)),
+      'killed_at: '  + (e.killed_at  || fmtAbs(e.killed_ts)),
+      'duration: '   + (e.duration_sec || 0).toFixed(2) + 's',
+      'status: '     + (e.status || (e._running ? 'running(推断)' : 'ok')),
+    ].join('\n');
+    html += '<div class="sbtl-row">' +
+              '<div class="sbtl-label">#' + (i+1) + ' ' + (e.stage || e.kind || 'sandbox') + '</div>' +
+              '<div class="sbtl-track">' +
+                '<div class="sbtl-bar ' + stageCls + '" ' +
+                  'style="left:' + left.toFixed(2) + '%;width:' + width.toFixed(2) + '%" ' +
+                  'title="' + title.replace(/"/g,'&quot;') + '">' +
+                  sidShort + ' · ' + (e.duration_sec||0).toFixed(1) + 's' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+  });
+  body.innerHTML = html;
 }
 
 function onProgress(ev){

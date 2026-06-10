@@ -212,6 +212,9 @@ class ProductJob(BaseModel):
 
     # 沙箱可观测：跑出过哪些 AGR 实例，便于事后排障
     sandbox_ids: list[str] = Field(default_factory=list)
+    # 沙箱完整生命周期事件（v1.2.1+）：每个 dict 含 sandbox_id/kind/stage/created_at/killed_at/duration_sec/...
+    # 字段 schema 详见 sandbox_executor._emit_event
+    sandbox_events: list[dict] = Field(default_factory=list)
 
     output: Optional[ProductOutput] = None
     error: str = ""

@@ -501,6 +501,41 @@ async def get_product_job(job_id: str) -> ProductJob:
     return job
 
 
+@app.get("/api/product/jobs/{job_id}/sandboxes")
+async def product_job_sandboxes(job_id: str) -> dict:
+    """选品任务用过的所有沙箱生命周期（v1.2.1+）。
+
+    返回该 job 内所有沙箱的 created_at/killed_at/duration_sec/stage 等，
+    便于排查"创建/销毁时间 + 是否有并发"。
+    """
+    job = store.get_product(job_id)
+    if not job:
+        raise HTTPException(404, "选品任务不存在")
+    events = list(job.sandbox_events or [])
+    total_sandbox_sec = sum(float(e.get("duration_sec") or 0) for e in events)
+    return {
+        "job_id": job.id,
+        "sandbox_count": len(events),
+        "total_sandbox_sec": round(total_sandbox_sec, 2),
+        "events": events,
+        # 仍然保留旧字段供老客户端兼容
+        "sandbox_ids": job.sandbox_ids,
+    }
+
+
+@app.get("/api/sandbox/recent")
+async def sandbox_recent(limit: int = 50) -> dict:
+    """最近 N 条沙箱生命周期事件（按时间倒序），用于看是否多沙箱并发。
+
+    数据源：backend/.cache/sandbox_events.jsonl（append-only）
+    跨任务、跨 backend 全局视角；前端的"沙箱执行轨迹"也可用此端点。
+    """
+    from .sandbox_executor import read_recent_events  # 延迟导入避免循环
+    limit = max(1, min(500, int(limit)))
+    events = read_recent_events(limit)
+    return {"count": len(events), "events": events}
+
+
 @app.get("/api/product/jobs")
 async def list_product_jobs() -> list[ProductJob]:
     return store.list_recent_products()

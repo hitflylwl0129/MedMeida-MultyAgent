@@ -149,7 +149,13 @@ _PARSE_RUNNER = textwrap.dedent("""
 """).strip()
 
 
-def _parse_excel_in_sandbox(upload_path: Path, sandbox_ids: list[str]) -> dict:
+def _parse_excel_in_sandbox(
+    upload_path: Path,
+    sandbox_ids: list[str],
+    *,
+    job_id: str = "",
+    sandbox_events: list[dict] | None = None,
+) -> dict:
     """打开沙箱 → 投递文件 → 跑 pandas runner → 解析 stdout → 销毁。"""
     if not upload_path.is_file():
         raise FileNotFoundError(f"上传文件不存在：{upload_path}")
@@ -158,9 +164,8 @@ def _parse_excel_in_sandbox(upload_path: Path, sandbox_ids: list[str]) -> dict:
     suffix = upload_path.suffix.lower() or ".xlsx"
     sandbox_path = f"/home/user/uploads/sales{suffix}"
 
-    with code_sandbox() as sb:
+    with code_sandbox(stage="parse_excel", job_id=job_id, collector=sandbox_events) as sb:
         sandbox_ids.append(sb.sandbox_id)
-        # 把本地文件写到沙箱
         with upload_path.open("rb") as f:
             sb.files.write(sandbox_path, f.read())
 
@@ -251,14 +256,21 @@ _SCORE_RUNNER = textwrap.dedent("""
 """).strip()
 
 
-def _score_in_sandbox(skus: list[dict], trends: dict[str, float], sandbox_ids: list[str]) -> list[dict]:
+def _score_in_sandbox(
+    skus: list[dict],
+    trends: dict[str, float],
+    sandbox_ids: list[str],
+    *,
+    job_id: str = "",
+    sandbox_events: list[dict] | None = None,
+) -> list[dict]:
     # 用 repr() 把 JSON 字符串变成合法 Python 字符串字面量（自动处理引号转义）
     skus_lit = repr(json.dumps(skus, ensure_ascii=False))
     trends_lit = repr(json.dumps(trends, ensure_ascii=False))
     runner = (_SCORE_RUNNER
               .replace("__SKUS_JSON__", skus_lit)
               .replace("__TRENDS_JSON__", trends_lit))
-    with code_sandbox() as sb:
+    with code_sandbox(stage="score", job_id=job_id, collector=sandbox_events) as sb:
         sandbox_ids.append(sb.sandbox_id)
         pip_r = sb.run_code(
             "import subprocess, sys; "
@@ -388,7 +400,10 @@ def run_product_pipeline(job: ProductJob, emit: EmitFn) -> None:
         upload_path = Path(job.brief.upload_path)
         if not upload_path.is_absolute():
             upload_path = Path(__file__).resolve().parents[2] / job.brief.upload_path
-        parsed = _parse_excel_in_sandbox(upload_path, job.sandbox_ids)
+        parsed = _parse_excel_in_sandbox(
+            upload_path, job.sandbox_ids,
+            job_id=job.id, sandbox_events=job.sandbox_events,
+        )
         (job_dir / "skus.json").write_text(
             json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8"
         )
@@ -407,7 +422,10 @@ def run_product_pipeline(job: ProductJob, emit: EmitFn) -> None:
         job.progress = 60
         job.message = "沙箱打分（pandas 加权 Top 5）…"
         emit(job, "st4")
-        tops = _score_in_sandbox(skus, trends, job.sandbox_ids)
+        tops = _score_in_sandbox(
+            skus, trends, job.sandbox_ids,
+            job_id=job.id, sandbox_events=job.sandbox_events,
+        )
 
         # ⑤ LLM 汇总
         job.status = JobStatus.COMPLIANCE  # 复用：汇总阶段

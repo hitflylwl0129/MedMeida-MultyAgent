@@ -150,8 +150,18 @@ class Settings(BaseSettings):
         """选品 Agent 是否具备调用 AGR 的最小条件。"""
         return bool(self.agr_enabled and self.e2b_api_key)
 
-
-
+    # ---- 选品 Agent v2.1（LLM 动态写解析代码） ----
+    # 第 ② 步「数据解析」执行模式：
+    #   "llm"       —— v2.1：LLM 看 schema 摘要后动态写 pandas（默认）
+    #   "hardcoded" —— v2.0：写死的列名词典 + groupby（紧急回滚兜底）
+    # 详见：选品Agent_LLM动态解析_v2.1设计.md
+    product_parse_mode: str = "llm"
+    # v2.1 LLM 解析重试上限（含首轮）。3 轮覆盖率/耗时性价比最优。
+    product_parse_llm_max_rounds: int = 3
+    # v2.1 LLM 出码生成时的 max_tokens / temperature
+    # 代码生成温度低一点更稳定，max_tokens 给足以容纳 80 行 pandas
+    product_parse_llm_temperature: float = 0.2
+    product_parse_llm_max_tokens: int = 1500
 
     # 轮询
     poll_interval_sec: int = 10

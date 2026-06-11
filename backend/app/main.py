@@ -507,17 +507,26 @@ async def product_job_sandboxes(job_id: str) -> dict:
 
     返回该 job 内所有沙箱的 created_at/killed_at/duration_sec/stage 等，
     便于排查"创建/销毁时间 + 是否有并发"。
+
+    v2.1+ 起 sandbox_events 还会混入 `event=parse_attempt` 的轮次诊断事件
+    （LLM 出码 → lint → exec → validate 每一步），用于前端展开"解析轮次明细"。
+    本端点同时返回拆分后的 sandbox_lifecycle / parse_attempts 两份视图。
     """
     job = store.get_product(job_id)
     if not job:
         raise HTTPException(404, "选品任务不存在")
-    events = list(job.sandbox_events or [])
-    total_sandbox_sec = sum(float(e.get("duration_sec") or 0) for e in events)
+    raw_events = list(job.sandbox_events or [])
+    # 拆分：沙箱生命周期 vs 解析轮次诊断
+    lifecycle = [e for e in raw_events if e.get("event") != "parse_attempt"]
+    attempts  = [e for e in raw_events if e.get("event") == "parse_attempt"]
+    total_sandbox_sec = sum(float(e.get("duration_sec") or 0) for e in lifecycle)
     return {
         "job_id": job.id,
-        "sandbox_count": len(events),
+        "sandbox_count": len(lifecycle),
         "total_sandbox_sec": round(total_sandbox_sec, 2),
-        "events": events,
+        # 兼容老前端：events 仍只放沙箱生命周期
+        "events": lifecycle,
+        "parse_attempts": attempts,
         # 仍然保留旧字段供老客户端兼容
         "sandbox_ids": job.sandbox_ids,
     }

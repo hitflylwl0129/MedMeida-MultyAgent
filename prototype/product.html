@@ -96,6 +96,29 @@
   .sbtl-legend{display:flex;gap:14px;font-size:10.5px;color:var(--txt3);margin-top:8px;flex-wrap:wrap}
   .sbtl-legend .dot{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:middle;margin-right:4px}
 
+  /* v2.1 LLM 解析轮次明细面板（与沙箱时间线并排，独立可折叠） */
+  .sbatt{margin-top:12px;background:#0a0c12;border:1px solid var(--line);border-radius:8px;padding:0}
+  .sbatt > summary{padding:10px 14px;font-size:11.5px;color:var(--txt2);cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center}
+  .sbatt > summary::-webkit-details-marker{display:none}
+  .sbatt > summary::before{content:'▶';margin-right:6px;font-size:9px;color:var(--txt3);transition:.2s}
+  .sbatt[open] > summary::before{transform:rotate(90deg)}
+  .sbatt-body{padding:0 14px 12px}
+  .sbatt-row{display:grid;grid-template-columns:42px 78px 96px 64px 1fr;gap:10px;font-size:10.5px;font-family:ui-monospace,Menlo,monospace;padding:5px 0;border-bottom:1px dotted rgba(255,255,255,.04)}
+  .sbatt-row:last-child{border-bottom:0}
+  .sbatt-row .r{color:var(--txt3)}
+  .sbatt-row .ph{padding:1px 6px;border-radius:3px;text-align:center;font-size:10px}
+  .sbatt-row .ph.probe   {background:rgba(105,128,255,.15);color:#9fb0ff}
+  .sbatt-row .ph.gen     {background:rgba(34,192,139,.15);color:#7be0b3}
+  .sbatt-row .ph.lint    {background:rgba(240,169,59,.18);color:#f5cc7a}
+  .sbatt-row .ph.exec    {background:rgba(122,92,255,.18);color:#b9a4ff}
+  .sbatt-row .ph.validate{background:rgba(34,192,139,.10);color:#7be0b3}
+  .sbatt-row .ok{color:#7be0b3}
+  .sbatt-row .ng{color:#ff8a8a}
+  .sbatt-row .lat{color:var(--txt2);text-align:right}
+  .sbatt-row .err{color:#ff8a8a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sbatt-row .err:empty::before{content:'—';color:var(--txt3)}
+  .sbatt-empty{font-size:11px;color:var(--txt3);padding:6px 0;font-family:ui-monospace,Menlo,monospace}
+
   /* 结果区 */
   #result{display:none}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:10px}
@@ -190,6 +213,18 @@
       </div>
     </div>
 
+    <!-- v2.1 LLM 解析轮次明细（仅 PRODUCT_PARSE_MODE=llm 才有数据；hardcoded 模式下面板隐藏） -->
+    <details class="sbatt" id="sbatt" style="display:none">
+      <summary>
+        <span>🧠 LLM 解析轮次明细（probe → gen → lint → exec → validate）</span>
+        <span class="meta" id="sbattMeta" style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--txt3)"></span>
+      </summary>
+      <div class="sbatt-body" id="sbattBody">
+        <div class="sbatt-empty">本任务尚未产生 LLM 解析事件。</div>
+      </div>
+    </details>
+
+
     <div class="err" id="errBox"></div>
   </div>
 
@@ -275,6 +310,16 @@ runBtn.onclick = async () => {
   document.getElementById('sbtlBody').innerHTML =
     '<div class="sbtl-empty">沙箱准备中…</div>';
   document.getElementById('sbtlMeta').textContent = '等待 job 启动…';
+  // 重置 v2.1 LLM 解析轮次明细面板（默认隐藏，下次有数据再展开）
+  const sbatt = document.getElementById('sbatt');
+  if(sbatt){
+    sbatt.style.display = 'none';
+    sbatt.removeAttribute('data-touched');
+    sbatt.open = false;
+    document.getElementById('sbattBody').innerHTML =
+      '<div class="sbatt-empty">本任务尚未产生 LLM 解析事件。</div>';
+    document.getElementById('sbattMeta').textContent = '';
+  }
   stopSandboxPolling();
   stTimes = {};
 
@@ -347,6 +392,8 @@ function renderSandboxTimeline(data, isFinal){
   const meta = document.getElementById('sbtlMeta');
   const events = (data && data.events) || [];
   const ids    = (data && data.sandbox_ids) || [];
+  // v2.1：把 LLM 解析轮次明细单独渲染（与时间线主框架解耦）
+  renderParseAttempts((data && data.parse_attempts) || []);
 
   // 没有 events：根据 sandbox_ids 推断一个"running"占位条（业务才开始时端口还没收尾，sandbox 已经在跑）
   if(!events.length){
@@ -451,6 +498,65 @@ function drawTimeline(events, body, meta, isFinal){
   });
   body.innerHTML = html;
 }
+
+// v2.1：LLM 解析轮次明细渲染。attempts = [{round,phase,ok,lat_sec,error,ts,...}, ...]
+// hardcoded 模式 attempts 永远为空，整块面板隐藏；llm 模式下首次出现就展开。
+function renderParseAttempts(attempts){
+  const det  = document.getElementById('sbatt');
+  const body = document.getElementById('sbattBody');
+  const meta = document.getElementById('sbattMeta');
+  if(!det || !body) return;
+  if(!attempts || !attempts.length){
+    det.style.display = 'none';
+    return;
+  }
+  det.style.display = '';
+  // 默认展开（用户没手动关过的话）
+  if(!det.hasAttribute('data-touched')) det.open = true;
+  // 汇总：总轮数 / 总耗时 / ok 数
+  const rounds = new Set(attempts.map(a => a.round)).size;
+  const totalLat = attempts.reduce((s,a) => s + (a.lat_sec||0), 0);
+  const okCnt = attempts.filter(a => a.ok).length;
+  const ngCnt = attempts.length - okCnt;
+  meta.textContent =
+    rounds + ' 轮 · ' + attempts.length + ' 步 · ✓' + okCnt +
+    ' ✗' + ngCnt + ' · 累计 ' + totalLat.toFixed(2) + 's';
+
+  // 时间排序（ts 升序），保持执行顺序
+  const sorted = attempts.slice().sort((a,b) => (a.ts||0) - (b.ts||0));
+  let html = '<div class="sbatt-row" style="color:var(--txt3);border-bottom:1px solid var(--line)">' +
+             '<div>轮次</div><div>阶段</div><div>结果</div><div class="lat">耗时</div><div>错误摘要</div></div>';
+  sorted.forEach(a => {
+    const phase = String(a.phase || '?').toLowerCase();
+    const phaseCls = ['probe','gen','lint','exec','validate'].includes(phase) ? phase : '';
+    const ok = !!a.ok;
+    const errText = ok ? '' : (a.error || '');
+    html += '<div class="sbatt-row" title="' +
+              ('ts: ' + (a.ts ? new Date(a.ts*1000).toLocaleTimeString('zh-CN',{hour12:false}) : '?') +
+               '\nphase: ' + phase + '\nok: ' + ok + '\nlat: ' + (a.lat_sec||0).toFixed(3) + 's' +
+               (errText ? '\nerror: ' + errText : '')
+              ).replace(/"/g,'&quot;') + '">' +
+              '<div class="r">#' + (a.round||0) + '</div>' +
+              '<div><span class="ph ' + phaseCls + '">' + phase + '</span></div>' +
+              '<div class="' + (ok ? 'ok' : 'ng') + '">' + (ok ? '✓ ok' : '✗ fail') + '</div>' +
+              '<div class="lat">' + (a.lat_sec||0).toFixed(2) + 's</div>' +
+              '<div class="err">' + (errText ? escapeHtml(errText) : '') + '</div>' +
+            '</div>';
+  });
+  body.innerHTML = html;
+}
+
+// 简易转义，避免 LLM 错误信息里的 < > & 破坏 HTML
+function escapeHtml(s){
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// 用户手动开关 details 后记录一下，避免后续轮询数据时强行展开覆盖用户操作
+document.addEventListener('toggle', (ev) => {
+  if(ev.target && ev.target.id === 'sbatt') ev.target.setAttribute('data-touched','1');
+}, true);
 
 function onProgress(ev){
   const st = ev.stage;

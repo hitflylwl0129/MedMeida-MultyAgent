@@ -1,4 +1,4 @@
-"""选品 Agent v2.0 —— 基于腾讯云 Agent Runtime 沙箱的"用户上传销量表→主推 Top N"。
+"""选品 Agent v2.0/v2.1 —— 基于腾讯云 Agent Runtime 沙箱的"用户上传销量表→主推 Top N"。
 
 业务编排（同进程 LangGraph 节点）：
 
@@ -8,18 +8,20 @@
     ① 需求理解（v2.0 MVP=Mock prompt）：从 brief 文本 + Excel 表头抽出业务关键词
        │
        ▼
-    ② 数据解析（AGR 代码沙箱）：pandas 读 Excel → 标准化为 SKU 销量 DataFrame → 落 JSON
+    ② 数据解析（AGR 代码沙箱）：两种实现按 PRODUCT_PARSE_MODE 切换
+       - v2.0 "hardcoded"：写死的列名词典 + groupby（紧急回滚兜底）
+       - v2.1 "llm"      ：LLM 看 schema 摘要后动态写 pandas + 失败回灌 ≤ N 轮
        │
        ▼
     ③ 行情抓取（v2.0 MVP=Mock）：返回每个 SKU 的"行情趋势分"（后续接药监局/百度指数）
        │
        ▼
-    ④ 候选打分（AGR 代码沙箱）：在沙箱里跑 pandas 加权 → 选 Top N
+    ④ 候选打分（AGR 代码沙箱）：在沙箱里跑 pandas 加权 → 选 Top N（v2.1 不动）
        │
        ▼
     ⑤ 结论汇总（纯 LLM）：给 Top1 一句话推荐理由 + 整理成 ProductOutput
 
-输出契约（v2.0 → 下游选医生 Agent）：
+输出契约（v2.0/v2.1 → 下游选医生 Agent）：
   - `ProductOutput.candidates[i]` 字段名与 prototype/product.html v1.0 的 PRODUCT_PROFILE 对齐
   - 前端把 Top1 写入 localStorage.sv_selected_product，下游 doctor.html 一行不改读取
 
@@ -392,18 +394,34 @@ def run_product_pipeline(job: ProductJob, emit: EmitFn) -> None:
             json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8"
         )
 
-        # ② 数据解析（沙箱）
+        # ② 数据解析（沙箱）—— 按 PRODUCT_PARSE_MODE 路由 v2.0 / v2.1
+        s = get_settings()
+        parse_mode = (s.product_parse_mode or "llm").lower()
         job.status = JobStatus.SUBMITTING
         job.progress = 20
-        job.message = "沙箱解析销量表（pandas）…"
+        job.message = (
+            "沙箱解析销量表（LLM 动态写 pandas）…"
+            if parse_mode == "llm"
+            else "沙箱解析销量表（pandas 写死规则）…"
+        )
         emit(job, "st2")
         upload_path = Path(job.brief.upload_path)
         if not upload_path.is_absolute():
             upload_path = Path(__file__).resolve().parents[2] / job.brief.upload_path
-        parsed = _parse_excel_in_sandbox(
-            upload_path, job.sandbox_ids,
-            job_id=job.id, sandbox_events=job.sandbox_events,
-        )
+
+        if parse_mode == "llm":
+            # v2.1：LLM 动态写代码 + 失败回灌 ≤ N 轮（无 fallback，失败直接抛）
+            from .parse_excel_v2_1 import parse_excel_in_sandbox_v2_1
+            parsed = parse_excel_in_sandbox_v2_1(
+                upload_path, job.sandbox_ids,
+                job_id=job.id, sandbox_events=job.sandbox_events,
+            )
+        else:
+            # v2.0：写死规则（hardcoded 模式，仅紧急回滚兜底）
+            parsed = _parse_excel_in_sandbox(
+                upload_path, job.sandbox_ids,
+                job_id=job.id, sandbox_events=job.sandbox_events,
+            )
         (job_dir / "skus.json").write_text(
             json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8"
         )

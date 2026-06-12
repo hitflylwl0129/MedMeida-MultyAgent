@@ -51,7 +51,7 @@ _LOCAL_JOBS_DIR = Path(__file__).resolve().parent.parent / ".cache" / "jobs"
 _PRODUCT_JOBS_DIR = Path(__file__).resolve().parent.parent / ".cache" / "product_jobs"
 
 
-app = FastAPI(title="短视频制作 Agent", version="0.1.0")
+app = FastAPI(title="短视频制作 Agent", version="1.4.0")
 
 # 前端原型用 file:// 或本地静态服务(localhost:8848) 打开，放开 CORS 便于联调
 app.add_middleware(

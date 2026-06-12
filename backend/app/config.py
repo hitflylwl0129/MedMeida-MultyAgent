@@ -163,6 +163,30 @@ class Settings(BaseSettings):
     product_parse_llm_temperature: float = 0.2
     product_parse_llm_max_tokens: int = 1500
 
+    # ---- 访问统计（v1.0 access stats）---- #
+    # 详见：访问统计_技术路线与原型.md
+    # 本模块所有数据本地化，不出域。
+    access_stats_enabled: bool = True
+    # access.db 路径（独立 SQLite，与 jobs.db 隔离），相对 backend/
+    access_db_path: str = ".cache/access.db"
+    # 后台 BasicAuth 凭证（生产 .env 必须覆盖默认值）
+    access_admin_user: str = "admin"
+    access_admin_pass: str = "Demo2026"
+    # 数据保留期（天），过期由定时任务归档 CSV 后删源表（PR-4 实现，PR-2 留 hook）
+    access_retention_days: int = 90
+    # IP 脱敏：admin 页展示是否对 IP 末段打码（192.168.1.*** ）
+    # 用户拍板 Q7：一直开（不区分操作员级别）
+    access_ip_mask_default: bool = True
+    # ingest 限流：单 IP 每秒最多 N 次 /api/track/p.gif
+    access_ingest_rate_per_sec: int = 5
+    # GeoIP 数据库路径（MaxMind GeoLite2-City.mmdb），相对 backend/
+    # 留空或文件不存在时跳过城市解析（不影响主链路）
+    access_geoip_path: str = "data/GeoLite2-City.mmdb"
+    # 心跳心跳判活窗口（秒）：>该窗口未上报心跳视为离开
+    access_online_window_sec: int = 300
+    # /api/track/footer（页脚条）数据缓存秒数（避免每次刷页都打 SQLite）
+    access_footer_cache_sec: int = 5
+
     # 轮询
     poll_interval_sec: int = 10
     poll_timeout_sec: int = 900

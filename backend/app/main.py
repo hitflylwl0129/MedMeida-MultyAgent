@@ -61,6 +61,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 访问统计路由（v1.0）— 包含 /api/track/* 公开 ingest 与 /api/admin/stats/* BasicAuth
+from . import access_router as _access_router  # noqa: E402
+app.include_router(_access_router.router)
+
+
+# 静态托管 track.js：云端走 nginx（root /opt/video-agent/prototype），本地联调时此 fallback 也能拿到
+@app.get("/static/track.js")
+async def _serve_track_js() -> FileResponse:
+    p = Path(__file__).resolve().parent.parent.parent / "prototype" / "static" / "track.js"
+    if not p.is_file():
+        raise HTTPException(404, "track.js 缺失")
+    return FileResponse(p, media_type="application/javascript",
+                        headers={"Cache-Control": "public, max-age=300"})
+
 
 @app.on_event("startup")
 async def _bind_loop() -> None:

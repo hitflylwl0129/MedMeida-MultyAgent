@@ -32,3 +32,6 @@ e2b>=1.0
 # 浏览器沙箱通过 CDP 远程操控（本端只装 SDK，chromium 跑在沙箱里，无需 install_browser）
 playwright>=1.45
 
+# 访问统计 v1.0（可选；缺包时模块自动降级到正则解析 / 跳过城市归属）
+user-agents>=2.2     # UA 解析：浏览器/操作系统/设备类型
+geoip2>=4.8          # IP → 城市离线查询（需 backend/data/GeoLite2-City.mmdb）

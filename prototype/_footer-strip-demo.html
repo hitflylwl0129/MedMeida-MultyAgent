@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>页脚访问计数器 · 视觉原型</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root{
+    --bg:#0f1117; --panel:#171a23; --panel2:#1d212c; --line:#2a2f3d;
+    --txt:#e6e9ef; --txt2:#9aa3b2; --txt3:#6b7382;
+    --brand:#4f7cff; --brand2:#7a5cff; --ok:#22c08b; --warn:#f0a93b;
+    --chip:#222736;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+       background:var(--bg);color:var(--txt);font-size:13.5px;min-height:100vh;padding:30px 22px 70px}
+  .wrap{max-width:980px;margin:0 auto}
+  h1{font-size:18px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+  h1 .ico{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:grid;place-items:center}
+  .sub{color:var(--txt3);font-size:12.5px;margin-bottom:20px}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:22px;margin-bottom:18px}
+  .card h3{font-size:13.5px;font-weight:700;margin-bottom:12px;color:var(--txt)}
+  .card p{color:var(--txt2);font-size:12.5px;line-height:1.7;margin-bottom:8px}
+  .card code{background:var(--panel2);padding:2px 7px;border-radius:5px;font-size:11.5px;
+             font-family:ui-monospace,Menlo,monospace;color:#9fb0ff;border:1px solid var(--line)}
+
+  /* 演示样式：把 strip 直接渲染进卡片里（非 fixed）以便对比 */
+  .demo-box{background:var(--bg);border:1px solid var(--line);border-radius:9px;
+            padding:0;overflow:hidden;position:relative;height:120px;margin-top:14px}
+  .demo-box::before{content:'（页面其它内容…）';position:absolute;left:0;right:0;top:30px;
+                    color:var(--txt3);font-size:11px;text-align:center;opacity:.6}
+  .demo-strip{position:absolute;left:0;right:0;bottom:0;height:32px;
+              background:rgba(13,15,22,.94);backdrop-filter:blur(10px);
+              border-top:1px solid var(--line);
+              display:flex;justify-content:space-between;align-items:center;padding:0 18px;
+              font-size:11px;color:var(--txt2);font-family:ui-monospace,Menlo,monospace}
+  .demo-strip b{color:var(--txt)}
+  .demo-strip .live{color:var(--ok)}
+  .demo-strip .ico{cursor:help;color:var(--txt3);margin-left:5px}
+
+  /* 不同变体 */
+  .variant-b .demo-strip{background:rgba(28,34,54,.96);border-top:1px solid #3a4262}
+  .variant-c .demo-strip{height:40px;font-size:11.5px;background:linear-gradient(180deg,rgba(13,15,22,0),rgba(13,15,22,.95) 30%)}
+  .variant-d .demo-strip{height:24px;font-size:10.5px;padding:0 14px;background:rgba(13,15,22,.7)}
+
+  /* 真实 fixed 演示（页面最下方） */
+  .real-strip{position:fixed;left:0;right:0;bottom:0;height:32px;background:rgba(13,15,22,.94);
+              backdrop-filter:blur(10px);border-top:1px solid var(--line);
+              display:flex;justify-content:space-between;align-items:center;padding:0 22px;
+              font-size:11px;color:var(--txt2);font-family:ui-monospace,Menlo,monospace;z-index:99}
+  .real-strip b{color:var(--txt)}
+  .real-strip .live{color:var(--ok)}
+  .real-strip .ico{cursor:help;color:var(--txt3);margin-left:6px}
+  .real-tag{position:fixed;left:50%;bottom:38px;transform:translateX(-50%);
+            background:rgba(240,169,59,.18);color:var(--warn);padding:3px 10px;
+            border:1px solid rgba(240,169,59,.4);border-radius:5px;font-size:10px;font-family:ui-monospace,Menlo,monospace}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <h1><span class="ico">🦶</span> 页脚访问计数器 · 视觉原型</h1>
+  <p class="sub">
+    位于每个 HTML 页面底部的固定 strip，宽度 100%，高 32px（默认），
+    不抢主视觉、不扰主交互。以下是 4 种视觉变体供你对比。
+  </p>
+
+  <!-- 变体 A：默认（推荐） -->
+  <div class="card">
+    <h3>方案 A · 默认（推荐）</h3>
+    <p>透明黑底 + 半透模糊 + 极简单行；左侧业务数字、右侧"您的 IP + ⓘ 隐私说明"。</p>
+    <div class="demo-box">
+      <div class="demo-strip">
+        <div>
+          <span class="live">●</span> <b>3</b> 在线
+          &nbsp;&nbsp; 今日 <b>1,247</b> PV / <b>89</b> UV
+          &nbsp;&nbsp; 累计 <b>12,890</b>
+        </div>
+        <div>
+          您的 IP <b>218.20.85.142</b>
+          <span class="ico" title="本站统计访问 IP/浏览类型，不存 cookie/不识别个人">ⓘ</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 变体 B：贴合 app.html 主题色 -->
+  <div class="card variant-b">
+    <h3>方案 B · 贴合 app.html 主题色（钴蓝深空）</h3>
+    <p>背景色匹配 <code>--panel</code>，更"嵌入感"，但视觉重量略增。</p>
+    <div class="demo-box">
+      <div class="demo-strip">
+        <div>
+          <span class="live">●</span> <b>3</b> 在线
+          &nbsp;&nbsp; 今日 <b>1,247</b> PV / <b>89</b> UV
+          &nbsp;&nbsp; 累计 <b>12,890</b>
+        </div>
+        <div>
+          您的 IP <b>218.20.85.142</b>
+          <span class="ico" title="本站统计访问 IP/浏览类型，不存 cookie/不识别个人">ⓘ</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 变体 C：渐变上沿 -->
+  <div class="card variant-c">
+    <h3>方案 C · 渐变上沿（与页面无缝融合）</h3>
+    <p>顶部从透明渐变到深色，更柔和但占空间略大（40px 高）。</p>
+    <div class="demo-box">
+      <div class="demo-strip">
+        <div>
+          <span class="live">●</span> <b>3</b> 在线
+          &nbsp;&nbsp; 今日 <b>1,247</b> PV / <b>89</b> UV
+          &nbsp;&nbsp; 累计 <b>12,890</b>
+        </div>
+        <div>
+          您的 IP <b>218.20.85.142</b>
+          <span class="ico" title="本站统计访问 IP/浏览类型，不存 cookie/不识别个人">ⓘ</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 变体 D：极简精瘦 -->
+  <div class="card variant-d">
+    <h3>方案 D · 极简精瘦（24px 高，仅核心数字）</h3>
+    <p>最低视觉打扰，适合主操作密集的 product/video 页面。</p>
+    <div class="demo-box">
+      <div class="demo-strip">
+        <div><span class="live">●</span> <b>3</b> 在线 · 今日 <b>1,247</b> · 累计 <b>12,890</b></div>
+        <div>IP <b>218.20.x.x</b><span class="ico" title="隐私说明">ⓘ</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 推荐 + 实际 fixed 演示 -->
+  <div class="card">
+    <h3>📌 默认推荐：方案 A（与下方页面真实 fixed 效果一致）</h3>
+    <p>
+      <b>选择理由</b>：信息密度适中（在线/PV/UV/累计/IP 一眼可见）、视觉打扰最低、与现有暗色主题一致、
+      与 admin.html 风格统一。
+    </p>
+    <p style="margin-top:14px">
+      <b>展示位</b>：每个 prototype/*.html 页面注入。
+      由 <code>track.js</code> 从 <code>/api/track/footer</code> 拉数据后渲染：每 30s 刷新在线数。
+    </p>
+    <p>
+      <b>展示数据语义</b>：
+      <code>● 在线</code> = 最近 5 分钟内有心跳的 session 数；
+      <code>今日 PV</code> = 今天总浏览量；
+      <code>UV</code> = 今天独立 IP+UA 数；
+      <code>累计</code> = 上线以来总 PV；
+      <code>您的 IP</code> = X-Real-IP（当前请求的 nginx 已识别）。
+    </p>
+  </div>
+
+  <!-- 关于 ⓘ 隐私说明的弹窗预览 -->
+  <div class="card">
+    <h3>ⓘ 悬停隐私说明（鼠标 hover 时浏览器原生 title tooltip）</h3>
+    <p style="background:var(--panel2);border-left:3px solid var(--brand);padding:12px 14px;border-radius:6px;color:var(--txt)">
+      本站仅统计访问 IP 与浏览器类型，用于了解访问规模与板块热度。<br>
+      <b style="color:var(--ok)">不</b>存放 cookie，<b style="color:var(--ok)">不</b>识别您的个人身份，<b style="color:var(--ok)">不</b>共享给第三方。
+    </p>
+  </div>
+
+</div>
+
+<!-- 实际固定底部的真实演示 -->
+<div class="real-strip">
+  <div>
+    <span class="live">●</span>
+    <b id="rsOnline">3</b> 在线
+    &nbsp;&nbsp;
+    今日 <b>1,247</b> PV / <b>89</b> UV
+    &nbsp;&nbsp;
+    累计 <b>12,890</b>
+  </div>
+  <div>
+    您的 IP <b>218.20.85.142</b>
+    <span class="ico" title="本站仅统计访问 IP/浏览器类型，不存 cookie/不识别个人">ⓘ</span>
+  </div>
+</div>
+<div class="real-tag">↑ 这就是真正注入到每个页面的 fixed 页脚条 ↑</div>
+
+<script>
+  // 模拟在线数小幅波动
+  setInterval(() => {
+    const el = document.getElementById('rsOnline');
+    const n = parseInt(el.textContent, 10);
+    el.textContent = Math.max(1, Math.min(8, n + (Math.random() < 0.5 ? -1 : 1)));
+  }, 4000);
+</script>
+</body>
+</html>

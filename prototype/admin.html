@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>访问统计后台 · MedMedia · 静态原型</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  /* ===== 与 app.html / product.html 同款主题（默认 Z 暗夜钴蓝） ===== */
+  :root{
+    --bg:#0f1117; --panel:#171a23; --panel2:#1d212c; --line:#2a2f3d;
+    --txt:#e6e9ef; --txt2:#9aa3b2; --txt3:#6b7382;
+    --brand:#4f7cff; --brand2:#7a5cff; --ok:#22c08b; --warn:#f0a93b; --err:#f25c66;
+    --chip:#222736;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+       background:var(--bg);color:var(--txt);font-size:13.5px;min-height:100vh;padding-bottom:46px}
+
+  /* ===== 顶部 ===== */
+  .topbar{background:var(--panel);border-bottom:1px solid var(--line);
+          padding:14px 22px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:5}
+  .topbar h1{font-size:16px;font-weight:700;display:flex;align-items:center;gap:9px}
+  .topbar h1 .ico{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--brand),var(--brand2));
+                  display:grid;place-items:center;font-size:14px}
+  .topbar .meta{margin-left:auto;color:var(--txt3);font-size:11.5px;font-family:ui-monospace,Menlo,monospace}
+  .topbar .meta b{color:var(--txt2)}
+  .topbar .meta .live{color:var(--ok)}
+
+  /* ===== 内容布局 ===== */
+  .wrap{max-width:1380px;margin:0 auto;padding:18px 22px}
+
+  /* 筛选条 */
+  .toolbar{background:var(--panel);border:1px solid var(--line);border-radius:13px;
+           padding:12px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+  .toolbar .lbl{font-size:11px;color:var(--txt3);font-weight:700;letter-spacing:.5px;margin-right:2px}
+  .seg{display:inline-flex;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:3px;gap:2px}
+  .seg button{background:transparent;border:0;color:var(--txt2);padding:6px 12px;font-size:12px;
+              border-radius:7px;cursor:pointer;font-weight:600;transition:.13s}
+  .seg button:hover{color:var(--txt)}
+  .seg button.on{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 2px 8px rgba(79,124,255,.28)}
+  select,input[type=text]{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+                          padding:7px 10px;border-radius:8px;font-size:12px;outline:none;transition:.13s}
+  select:focus,input[type=text]:focus{border-color:rgba(79,124,255,.55)}
+  .search{flex:1;min-width:180px}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+       padding:7px 13px;border-radius:8px;font-size:12px;cursor:pointer;font-weight:600;transition:.13s}
+  .btn:hover{border-color:rgba(79,124,255,.55)}
+  .btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));border:0;color:#fff}
+
+  /* KPI 卡片 */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:18px 20px;
+       position:relative;overflow:hidden}
+  .kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+               background:linear-gradient(180deg,var(--brand),var(--brand2))}
+  .kpi.ok::before{background:linear-gradient(180deg,var(--ok),#1aa074)}
+  .kpi.warn::before{background:linear-gradient(180deg,var(--warn),#d18b1a)}
+  .kpi.live::before{background:linear-gradient(180deg,#ff6b9d,#f25c66)}
+  .kpi h4{font-size:11.5px;color:var(--txt3);font-weight:600;letter-spacing:.5px;margin-bottom:8px;
+          display:flex;align-items:center;gap:5px}
+  .kpi .num{font-size:30px;font-weight:700;font-feature-settings:"tnum";line-height:1.1}
+  .kpi .num small{font-size:14px;color:var(--txt3);font-weight:500;margin-left:5px}
+  .kpi .delta{margin-top:6px;font-size:11.5px;color:var(--txt3)}
+  .kpi .delta.up{color:var(--ok)} .kpi .delta.down{color:var(--err)}
+  .kpi .delta b{font-family:ui-monospace,Menlo,monospace}
+
+  /* 趋势图 */
+  .trend{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:16px 20px;margin-bottom:16px}
+  .trend h3{font-size:13px;font-weight:700;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+  .trend h3 .legend{font-size:10.5px;color:var(--txt3);font-weight:500}
+  .trend h3 .legend .dot{display:inline-block;width:8px;height:8px;border-radius:2px;vertical-align:middle;margin-right:4px}
+  .chart{height:180px;position:relative}
+  .chart svg{width:100%;height:100%;display:block}
+
+  /* 双栏 */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+  @media (max-width:980px){.grid2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:16px 20px}
+  .card h3{font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .card h3 .badge{font-size:10px;padding:2px 7px;border-radius:5px;background:var(--chip);color:var(--txt2);font-weight:500}
+
+  /* 板块条形图 */
+  .barlist{display:flex;flex-direction:column;gap:8px}
+  .barrow{display:grid;grid-template-columns:108px 1fr 64px;gap:10px;align-items:center;font-size:12px}
+  .barrow .lab{color:var(--txt2);font-family:ui-monospace,Menlo,monospace}
+  .barrow .bar{height:20px;background:var(--panel2);border-radius:5px;position:relative;overflow:hidden}
+  .barrow .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:5px;
+                 background:linear-gradient(90deg,var(--brand),var(--brand2));transition:.4s}
+  .barrow .bar i.product   {background:linear-gradient(90deg,#22c08b,#1aa074)}
+  .barrow .bar i.doctor    {background:linear-gradient(90deg,#7a5cff,#5e44c9)}
+  .barrow .bar i.video     {background:linear-gradient(90deg,#4f7cff,#3a5dd9)}
+  .barrow .bar i.script    {background:linear-gradient(90deg,#f0a93b,#d18b1a)}
+  .barrow .bar i.home      {background:linear-gradient(90deg,#9aa1ad,#666e7d)}
+  .barrow .bar i.distribute{background:linear-gradient(90deg,#ff6b9d,#cc5278)}
+  .barrow .bar i.audience  {background:linear-gradient(90deg,#5cd6ff,#3aa9d9)}
+  .barrow .bar i.ocr       {background:linear-gradient(90deg,#22c08b,#0aa074)}
+  .barrow .bar i.asr       {background:linear-gradient(90deg,#a07eff,#7e5cd9)}
+  .barrow .num{text-align:right;font-family:ui-monospace,Menlo,monospace;color:var(--txt);font-weight:600}
+
+  /* IP TOP 列表 */
+  .iplist{display:flex;flex-direction:column;gap:0}
+  .iprow{display:grid;grid-template-columns:130px 60px 1fr 60px 64px;gap:10px;align-items:center;
+         font-size:11.5px;padding:9px 0;border-bottom:1px dotted rgba(255,255,255,.04);font-family:ui-monospace,Menlo,monospace}
+  .iprow:last-child{border-bottom:0}
+  .iprow .ip{color:var(--txt)}
+  .iprow .city{color:var(--txt3);text-align:center;font-size:10.5px;background:var(--chip);padding:2px 6px;border-radius:4px}
+  .iprow .secs{color:var(--txt2);font-size:10px;display:flex;flex-wrap:wrap;gap:3px}
+  .iprow .secs span{padding:1px 5px;background:var(--chip);border-radius:3px}
+  .iprow .pv{text-align:right;color:var(--ok);font-weight:600}
+  .iprow .dur{text-align:right;color:var(--txt2)}
+
+  /* 明细表 */
+  .table{background:var(--panel);border:1px solid var(--line);border-radius:13px;overflow:hidden}
+  .table h3{font-size:13px;font-weight:700;padding:14px 20px;border-bottom:1px solid var(--line);
+            display:flex;align-items:center;justify-content:space-between}
+  .table h3 .right{display:flex;gap:8px}
+  table{width:100%;border-collapse:collapse;font-size:11.5px;font-family:ui-monospace,Menlo,monospace}
+  th{font-weight:600;color:var(--txt3);text-align:left;padding:10px 14px;background:#13161e;
+     border-bottom:1px solid var(--line);font-size:10.5px;letter-spacing:.5px;text-transform:uppercase}
+  td{padding:10px 14px;border-bottom:1px dotted rgba(255,255,255,.04);color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}
+  tr:hover td{background:rgba(79,124,255,.06)}
+  td .stag{padding:2px 7px;border-radius:4px;font-size:10px;background:var(--chip);color:var(--txt2)}
+  td .stag.product{background:rgba(34,192,139,.18);color:#7be0b3}
+  td .stag.doctor {background:rgba(122,92,255,.18);color:#b9a4ff}
+  td .stag.video  {background:rgba(79,124,255,.18);color:#9fb0ff}
+  td .stag.script {background:rgba(240,169,59,.18);color:#f5cc7a}
+  td .stag.home   {background:var(--chip);color:var(--txt2)}
+  td .stag.ocr    {background:rgba(34,192,139,.10);color:#7be0b3}
+  td .stag.asr    {background:rgba(160,126,255,.18);color:#c2a4ff}
+  td .ua-mob{color:#ff6b9d}
+  td .ua-pc {color:#9fb0ff}
+  td .city{color:var(--txt2);font-size:10.5px}
+
+  .pager{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;
+         border-top:1px solid var(--line);font-size:11.5px;color:var(--txt3)}
+  .pager .pages{display:flex;gap:4px}
+  .pager .pages button{background:var(--panel2);border:1px solid var(--line);color:var(--txt2);
+                       padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-family:ui-monospace,Menlo,monospace}
+  .pager .pages button.on{background:linear-gradient(135deg,var(--brand),var(--brand2));border:0;color:#fff}
+  .pager .pages button:disabled{opacity:.4;cursor:not-allowed}
+
+  /* 页脚 strip（演示放在 admin 自身底部） */
+  .fs-strip{position:fixed;left:0;right:0;bottom:0;height:32px;background:rgba(13,15,22,.94);
+            backdrop-filter:blur(10px);border-top:1px solid var(--line);
+            display:flex;justify-content:space-between;align-items:center;padding:0 22px;
+            font-size:11px;color:var(--txt2);font-family:ui-monospace,Menlo,monospace;z-index:20}
+  .fs-strip b{color:var(--txt)}
+  .fs-strip .live{color:var(--ok)}
+  .fs-strip .ico{cursor:help;color:var(--txt3);margin-left:6px}
+
+  /* 隐藏滚动条样式 */
+  ::-webkit-scrollbar{width:7px;height:7px}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:7px}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  /* 提示横幅 */
+  .banner{background:linear-gradient(90deg,rgba(240,169,59,.15),rgba(240,169,59,.05));
+          border:1px solid rgba(240,169,59,.25);border-radius:10px;padding:10px 14px;
+          font-size:11.5px;color:#f5cc7a;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .banner b{font-weight:700}
+</style>
+</head>
+<body>
+
+<!-- ===== 顶部 ===== -->
+<div class="topbar">
+  <h1><span class="ico">📊</span> 访问统计后台 <small style="color:var(--txt3);font-weight:400;font-size:11px;margin-left:8px">MedMedia · admin</small></h1>
+  <div class="meta">
+    数据源：<b>access.db</b> ·
+    最近更新：<b id="lastUpdate">刚刚</b> ·
+    <span class="live">● 实时</span>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- 静态原型提示横幅 -->
+  <div class="banner">
+    ⚠️ <b>静态原型 Mock 数据</b>，便于评审视觉与信息架构；后端 API 接入待 PR-2/PR-3 合入后切换为真实数据。
+  </div>
+
+  <!-- 筛选条 -->
+  <div class="toolbar">
+    <span class="lbl">时间</span>
+    <div class="seg">
+      <button>1H</button>
+      <button class="on">今日</button>
+      <button>7天</button>
+      <button>30天</button>
+      <button>自定义</button>
+    </div>
+    <span class="lbl">板块</span>
+    <select>
+      <option>全部</option>
+      <optgroup label="营销中台 marketing">
+        <option>marketing.home（流程导航）</option>
+        <option>marketing.product（选品）</option>
+        <option>marketing.doctor（选医生）</option>
+        <option>marketing.script（话术）</option>
+        <option>marketing.video（视频生成）</option>
+        <option>marketing.distribute（分发）</option>
+        <option>marketing.audience（受众）</option>
+      </optgroup>
+      <optgroup label="独立板块（:8000）">
+        <option>ocr</option>
+        <option>asr</option>
+        <option>raw</option>
+        <option>qc</option>
+      </optgroup>
+    </select>
+    <input class="search" type="text" placeholder="🔍 搜索 IP / 城市 / UA …">
+    <span class="lbl" style="margin-left:auto">IP</span>
+    <div class="seg">
+      <button class="on" title="完整显示">完整</button>
+      <button title="末段脱敏 218.20.x.x">脱敏</button>
+    </div>
+    <button class="btn">⬇ 导出 CSV</button>
+    <button class="btn primary">🔄 刷新</button>
+  </div>
+
+  <!-- KPI 卡片 -->
+  <div class="kpis">
+    <div class="kpi">
+      <h4>📈 PV 浏览量</h4>
+      <div class="num">1,247</div>
+      <div class="delta up">↑ <b>+12.4%</b> · vs 昨日</div>
+    </div>
+    <div class="kpi ok">
+      <h4>👥 UV 独立访客</h4>
+      <div class="num">89</div>
+      <div class="delta up">↑ <b>+5.2%</b> · vs 昨日</div>
+    </div>
+    <div class="kpi live">
+      <h4>🟢 当前在线</h4>
+      <div class="num">3 <small>位</small></div>
+      <div class="delta">实时数据 · 5 秒前</div>
+    </div>
+    <div class="kpi warn">
+      <h4>⏱ 平均停留</h4>
+      <div class="num">2'14"</div>
+      <div class="delta down">↓ <b>-3.1%</b> · vs 昨日</div>
+    </div>
+  </div>
+
+  <!-- 时间趋势 -->
+  <div class="trend">
+    <h3>
+      <span>📊 24 小时访问趋势</span>
+      <span class="legend">
+        <span class="dot" style="background:var(--brand)"></span>PV
+        <span class="dot" style="background:var(--ok);margin-left:10px"></span>UV
+      </span>
+    </h3>
+    <div class="chart">
+      <svg viewBox="0 0 800 180" preserveAspectRatio="none">
+        <!-- 网格 -->
+        <g stroke="rgba(255,255,255,0.04)" stroke-width="1">
+          <line x1="0" y1="30"  x2="800" y2="30"/>
+          <line x1="0" y1="75"  x2="800" y2="75"/>
+          <line x1="0" y1="120" x2="800" y2="120"/>
+          <line x1="0" y1="165" x2="800" y2="165"/>
+        </g>
+        <!-- 时间刻度 -->
+        <g fill="var(--txt3)" font-size="9" font-family="ui-monospace,Menlo,monospace">
+          <text x="2"   y="178">00:00</text>
+          <text x="200" y="178">06:00</text>
+          <text x="400" y="178">12:00</text>
+          <text x="600" y="178">18:00</text>
+          <text x="755" y="178">23:00</text>
+        </g>
+        <!-- PV 折线 -->
+        <polyline fill="none" stroke="var(--brand)" stroke-width="2.2"
+          points="0,150 33,148 66,145 100,142 133,138 166,130 200,118 233,108 266,90 300,75 333,72 366,68 400,55 433,42 466,38 500,45 533,52 566,60 600,68 633,82 666,98 700,115 733,128 766,140 800,148"/>
+        <!-- PV 渐变填充 -->
+        <defs><linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="rgba(79,124,255,.32)"/>
+          <stop offset="100%" stop-color="rgba(79,124,255,0)"/>
+        </linearGradient></defs>
+        <polygon fill="url(#g1)" points="0,150 33,148 66,145 100,142 133,138 166,130 200,118 233,108 266,90 300,75 333,72 366,68 400,55 433,42 466,38 500,45 533,52 566,60 600,68 633,82 666,98 700,115 733,128 766,140 800,148 800,165 0,165"/>
+        <!-- UV 折线 -->
+        <polyline fill="none" stroke="var(--ok)" stroke-width="1.8" stroke-dasharray="4 3"
+          points="0,162 33,160 66,158 100,156 133,153 166,148 200,142 233,136 266,127 300,118 333,116 366,114 400,108 433,100 466,96 500,98 533,102 566,108 600,114 633,124 666,135 700,144 733,150 766,156 800,160"/>
+        <!-- 当前时刻指示 -->
+        <line x1="600" y1="20" x2="600" y2="165" stroke="var(--warn)" stroke-width="1" stroke-dasharray="2 3" opacity="0.55"/>
+        <text x="606" y="28" fill="var(--warn)" font-size="9.5" font-family="ui-monospace,Menlo,monospace">现在 18:42</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- 双栏：板块分布 + IP TOP 10 -->
+  <div class="grid2">
+    <div class="card">
+      <h3>🧩 板块访问分布 <span class="badge">今日 · 5 个板块</span></h3>
+
+      <!-- 顶层：5 个主板块 -->
+      <div style="font-size:10.5px;color:var(--txt3);font-weight:700;letter-spacing:.5px;margin-bottom:8px">主板块（粗粒度）</div>
+      <div class="barlist" style="margin-bottom:14px">
+        <div class="barrow"><span class="lab">marketing</span><div class="bar"><i class="product" style="width:96%"></i></div><span class="num">1,233</span></div>
+        <div class="barrow"><span class="lab">ocr</span>      <div class="bar"><i class="ocr"     style="width:8%"></i></div><span class="num">98</span></div>
+        <div class="barrow"><span class="lab">asr</span>      <div class="bar"><i class="asr"     style="width:6%"></i></div><span class="num">76</span></div>
+        <div class="barrow"><span class="lab">raw</span>      <div class="bar"><i class="distribute" style="width:3%"></i></div><span class="num">34</span></div>
+        <div class="barrow"><span class="lab">qc</span>       <div class="bar"><i class="audience" style="width:2%"></i></div><span class="num">21</span></div>
+      </div>
+
+      <!-- 下钻：marketing 子板块 -->
+      <div style="font-size:10.5px;color:var(--txt3);font-weight:700;letter-spacing:.5px;margin-bottom:8px">└ marketing 子板块（下钻）</div>
+      <div class="barlist">
+        <div class="barrow"><span class="lab">  product</span><div class="bar"><i class="product" style="width:90%"></i></div><span class="num">432</span></div>
+        <div class="barrow"><span class="lab">  doctor</span> <div class="bar"><i class="doctor"  style="width:56%"></i></div><span class="num">267</span></div>
+        <div class="barrow"><span class="lab">  video</span>  <div class="bar"><i class="video"   style="width:41%"></i></div><span class="num">198</span></div>
+        <div class="barrow"><span class="lab">  home</span>   <div class="bar"><i class="home"    style="width:30%"></i></div><span class="num">142</span></div>
+        <div class="barrow"><span class="lab">  script</span> <div class="bar"><i class="script"  style="width:19%"></i></div><span class="num">89</span></div>
+        <div class="barrow"><span class="lab">  distribute</span><div class="bar"><i class="distribute" style="width:13%"></i></div><span class="num">62</span></div>
+        <div class="barrow"><span class="lab">  audience</span><div class="bar"><i class="audience" style="width:9%"></i></div><span class="num">43</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🌍 来源 IP TOP 10 <span class="badge">今日</span></h3>
+      <div class="iplist">
+        <div class="iprow">
+          <span class="ip">218.20.85.142</span><span class="city">广州</span>
+          <span class="secs"><span>product</span><span>doctor</span><span>video</span></span>
+          <span class="pv">85</span><span class="dur">3'45"</span>
+        </div>
+        <div class="iprow">
+          <span class="ip">117.135.62.18</span><span class="city">北京</span>
+          <span class="secs"><span>home</span><span>product</span></span>
+          <span class="pv">42</span><span class="dur">6'12"</span>
+        </div>
+        <div class="iprow">
+          <span class="ip">124.222.18.91</span><span class="city">上海</span>
+          <span class="secs"><span>video</span><span>script</span></span>
+          <span class="pv">31</span><span class="dur">2'08"</span>
+        </div>
+        <div class="iprow">
+          <span class="ip">183.14.226.55</span><span class="city">深圳</span>
+          <span class="secs"><span>doctor</span></span>
+          <span class="pv">28</span><span class="dur">1'38"</span>
+        </div>
+        <div class="iprow">
+          <span class="ip">61.149.244.207</span><span class="city">成都</span>
+          <span class="secs"><span>product</span><span>script</span><span>video</span></span>
+          <span class="pv">26</span><span class="dur">5'23"</span>
+        </div>
+        <div class="iprow">
+          <span class="ip">115.236.17.138</span><span class="city">杭州</span>
+          <span class="secs"><span>home</span><span>audience</span></span>
+          <span class="pv">22</span><span class="dur">0'58"</span>
+        </div>
+        <div class="iprow">
+          <span class="ip">39.144.78.221</span><span class="city">武汉</span>
+          <span class="secs"><span>ocr</span></span>
+          <span class="pv">18</span><span class="dur">0'42"</span>
+        </div>
+        <div class="iprow">
+          <span class="ip">211.143.52.99</span><span class="city">南京</span>
+          <span class="secs"><span>product</span></span>
+          <span class="pv">15</span><span class="dur">1'15"</span>
+        </div>
+        <div class="iprow">
+          <span class="ip">221.218.63.7</span><span class="city">天津</span>
+          <span class="secs"><span>video</span><span>distribute</span></span>
+          <span class="pv">12</span><span class="dur">2'40"</span>
+        </div>
+        <div class="iprow">
+          <span class="ip">42.156.91.34</span><span class="city">西安</span>
+          <span class="secs"><span>asr</span></span>
+          <span class="pv">9</span><span class="dur">0'33"</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 明细表 -->
+  <div class="table">
+    <h3>
+      <span>📋 访客行为明细 <span class="badge">最近 50 条</span></span>
+      <span class="right">
+        <button class="btn">⬇ 导出 CSV</button>
+        <button class="btn">🔄 自动刷新（10s）</button>
+      </span>
+    </h3>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:130px">IP</th>
+          <th style="width:80px">城市</th>
+          <th style="width:140px">浏览器 / 系统</th>
+          <th style="width:90px">板块</th>
+          <th>页面</th>
+          <th style="width:140px">进入时间</th>
+          <th style="width:80px">停留</th>
+          <th style="width:100px">来源</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>218.20.85.142</td><td class="city">广州 · 联通</td><td class="ua-pc">Chrome 121 / macOS</td><td><span class="stag product">product</span></td><td>/product.html</td><td>09:42:18</td><td>3'45"</td><td class="city">直接访问</td></tr>
+        <tr><td>218.20.85.142</td><td class="city">广州 · 联通</td><td class="ua-pc">Chrome 121 / macOS</td><td><span class="stag doctor">doctor</span></td><td>/doctor.html</td><td>09:46:03</td><td>1'22"</td><td class="city">/product.html</td></tr>
+        <tr><td>218.20.85.142</td><td class="city">广州 · 联通</td><td class="ua-pc">Chrome 121 / macOS</td><td><span class="stag video">video</span></td><td>/video.html</td><td>09:47:25</td><td>2'10"</td><td class="city">/doctor.html</td></tr>
+        <tr><td>117.135.62.18</td><td class="city">北京 · 移动</td><td class="ua-mob">Safari 17 / iOS</td><td><span class="stag home">home</span></td><td>/app.html</td><td>09:38:47</td><td>0'12"</td><td class="city">直接访问</td></tr>
+        <tr><td>117.135.62.18</td><td class="city">北京 · 移动</td><td class="ua-mob">Safari 17 / iOS</td><td><span class="stag product">product</span></td><td>/product.html</td><td>09:38:59</td><td>4'12"</td><td class="city">/app.html</td></tr>
+        <tr><td>124.222.18.91</td><td class="city">上海 · 电信</td><td class="ua-pc">Edge 121 / Windows</td><td><span class="stag video">video</span></td><td>/video.html</td><td>09:35:14</td><td>1'08"</td><td class="city">直接访问</td></tr>
+        <tr><td>124.222.18.91</td><td class="city">上海 · 电信</td><td class="ua-pc">Edge 121 / Windows</td><td><span class="stag script">script</span></td><td>/script.html</td><td>09:36:22</td><td>1'00"</td><td class="city">/video.html</td></tr>
+        <tr><td>183.14.226.55</td><td class="city">深圳 · 联通</td><td class="ua-pc">Chrome 121 / Windows</td><td><span class="stag doctor">doctor</span></td><td>/doctor.html</td><td>09:31:08</td><td>1'38"</td><td class="city">google.com</td></tr>
+        <tr><td>61.149.244.207</td><td class="city">成都 · 电信</td><td class="ua-pc">Chrome 122 / macOS</td><td><span class="stag product">product</span></td><td>/product.html</td><td>09:28:51</td><td>2'18"</td><td class="city">直接访问</td></tr>
+        <tr><td>61.149.244.207</td><td class="city">成都 · 电信</td><td class="ua-pc">Chrome 122 / macOS</td><td><span class="stag script">script</span></td><td>/script.html</td><td>09:31:09</td><td>1'34"</td><td class="city">/product.html</td></tr>
+        <tr><td>61.149.244.207</td><td class="city">成都 · 电信</td><td class="ua-pc">Chrome 122 / macOS</td><td><span class="stag video">video</span></td><td>/video.html</td><td>09:32:43</td><td>1'31"</td><td class="city">/script.html</td></tr>
+        <tr><td>115.236.17.138</td><td class="city">杭州 · 电信</td><td class="ua-pc">Chrome 121 / macOS</td><td><span class="stag home">home</span></td><td>/app.html</td><td>09:25:19</td><td>0'58"</td><td class="city">bing.com</td></tr>
+        <tr><td>39.144.78.221</td><td class="city">武汉 · 移动</td><td class="ua-pc">Firefox 122 / Linux</td><td><span class="stag ocr">ocr</span></td><td>/ocr/upload</td><td>09:18:46</td><td>0'42"</td><td class="city">ruyifanyi.com</td></tr>
+        <tr><td>211.143.52.99</td><td class="city">南京 · 联通</td><td class="ua-mob">Chrome Mobile / Android</td><td><span class="stag product">product</span></td><td>/product.html</td><td>09:12:33</td><td>1'15"</td><td class="city">直接访问</td></tr>
+        <tr><td>42.156.91.34</td><td class="city">西安 · 电信</td><td class="ua-pc">Safari 17 / macOS</td><td><span class="stag asr">asr</span></td><td>/asr/upload</td><td>09:08:21</td><td>0'33"</td><td class="city">ruyifanyi.com</td></tr>
+      </tbody>
+    </table>
+    <div class="pager">
+      <span>共 <b style="color:var(--txt2)">1,247</b> 条 · 第 <b style="color:var(--txt2)">1</b> / 25 页</span>
+      <span class="pages">
+        <button disabled>‹</button>
+        <button class="on">1</button>
+        <button>2</button>
+        <button>3</button>
+        <button>4</button>
+        <button>5</button>
+        <button>…</button>
+        <button>25</button>
+        <button>›</button>
+      </span>
+    </div>
+  </div>
+
+</div>
+
+<!-- 页脚访问计数器条由 track.js 注入到所有页面，admin 也不例外，无需在此重复 -->
+
+<script>
+/* ===== admin 数据层 · 接 /api/admin/stats/* （BasicAuth 由浏览器原生弹窗弹出） =====
+ * 设计：保留 mock 数据作为骨架，API 成功后局部替换关键节点；失败时保留 mock 不破坏视觉
+ */
+(function(){
+  'use strict';
+  // 后端基址：admin 总是从同源拉，浏览器会带 BasicAuth 凭证（首次自动弹窗）
+  const BASE = location.origin.startsWith('http') ? '' : 'http://162.14.76.209';
+  const STATE = { rng: 'today', section: '', keyword: '', page: 1, size: 50, maskIP: true };
+
+  // ---------- DOM helpers ----------
+  const $$ = (sel) => document.querySelector(sel);
+  const fmt = (n) => n == null ? '--' : (n < 10000 ? String(n) : (n/1000).toFixed(1)+'k');
+  const fmtDur = (s) => {
+    s = +s || 0;
+    if (s < 60) return s + '"';
+    const m = Math.floor(s/60), r = s%60;
+    return m + "'" + String(r).padStart(2,'0') + '"';
+  };
+  const fmtTime = (ts) => {
+    const d = new Date(ts*1000);
+    return [d.getHours(), d.getMinutes(), d.getSeconds()]
+      .map(x => String(x).padStart(2,'0')).join(':');
+  };
+  const esc = (s) => String(s||'').replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+  ));
+  const sectionCls = (s) => {
+    if(['product','doctor','video','script','home','distribute','audience','ocr','asr'].includes(s)) return s;
+    return '';
+  };
+
+  async function api(path){
+    const r = await fetch(BASE + path, { credentials: 'same-origin', cache: 'no-store' });
+    if (r.status === 401){
+      // BasicAuth 失败 → 浏览器会自动弹窗；这里只做兜底提示
+      throw new Error('需要登录');
+    }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }
+
+  // ---------- 渲染：KPI ----------
+  function renderKpis(k){
+    const kpis = document.querySelectorAll('.kpis .kpi');
+    if (kpis.length < 4) return;
+    kpis[0].querySelector('.num').textContent = fmt(k.pv);
+    kpis[1].querySelector('.num').textContent = fmt(k.uv);
+    kpis[2].querySelector('.num').innerHTML   = fmt(k.online) + ' <small>位</small>';
+    kpis[3].querySelector('.num').textContent = fmtDur(k.avg_dur_sec);
+    kpis[0].querySelector('.delta').innerHTML = `当前窗口 · 真实数据`;
+    kpis[1].querySelector('.delta').innerHTML = `当前窗口 · 真实数据`;
+    kpis[2].querySelector('.delta').innerHTML = `5 分钟内有心跳`;
+    kpis[3].querySelector('.delta').innerHTML = `仅 dur>0 的事件均值`;
+  }
+
+  // ---------- 渲染：时间趋势 SVG ----------
+  function renderTimeline(rows, bucketSec){
+    const svg = document.querySelector('.trend .chart svg');
+    if (!svg || !rows.length) return;
+    const W = 800, H = 180, padBottom = 18;
+    const pvMax = Math.max(1, ...rows.map(r => r.pv));
+    const xs = rows.map((r,i) => (i / Math.max(1, rows.length-1)) * W);
+    const ysPV = rows.map(r => (H - padBottom) - (r.pv / pvMax) * (H - padBottom - 18));
+    const ysUV = rows.map(r => (H - padBottom) - (r.uv / pvMax) * (H - padBottom - 18));
+    const pts = (xs, ys) => xs.map((x,i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
+    const polyPV = svg.querySelectorAll('polyline')[0];
+    const polyUV = svg.querySelectorAll('polyline')[1];
+    const fill   = svg.querySelector('polygon');
+    if (polyPV) polyPV.setAttribute('points', pts(xs, ysPV));
+    if (polyUV) polyUV.setAttribute('points', pts(xs, ysUV));
+    if (fill){
+      const p = pts(xs, ysPV);
+      fill.setAttribute('points', p + ` ${W},${H-padBottom} 0,${H-padBottom}`);
+    }
+    // 时间刻度：第一个/中间/最后
+    const labels = svg.querySelectorAll('g[fill="var(--txt3)"] text, g text');
+    // 不动旧 X 轴标签（mock 是 00/06/12/18/23）；真实时段时间轴留给 PR-3 二期再做精细化
+  }
+
+  // ---------- 渲染：板块分布（两层） ----------
+  function renderSections(dist){
+    // 顶层 5 板块
+    const card = document.querySelectorAll('.grid2 .card')[0];
+    if (!card) return;
+    const lists = card.querySelectorAll('.barlist');
+    if (lists.length < 2) return;
+    const mainList = lists[0], subList = lists[1];
+    const mainTotal = Math.max(1, ...dist.main.map(x => x.pv));
+    mainList.innerHTML = dist.main.length
+      ? dist.main.map(x => `
+          <div class="barrow">
+            <span class="lab">${esc(x.section)}</span>
+            <div class="bar"><i class="${sectionCls(x.section)||'home'}" style="width:${(x.pv/mainTotal*100).toFixed(0)}%"></i></div>
+            <span class="num">${fmt(x.pv)}</span>
+          </div>`).join('')
+      : '<div style="color:var(--txt3);font-size:11.5px;padding:8px 0">尚无数据</div>';
+    const subTotal = Math.max(1, ...dist.sub.map(x => x.pv));
+    subList.innerHTML = dist.sub.length
+      ? dist.sub.map(x => `
+          <div class="barrow">
+            <span class="lab">  ${esc(x.subsection)}</span>
+            <div class="bar"><i class="${sectionCls(x.subsection)||'home'}" style="width:${(x.pv/subTotal*100).toFixed(0)}%"></i></div>
+            <span class="num">${fmt(x.pv)}</span>
+          </div>`).join('')
+      : '<div style="color:var(--txt3);font-size:11.5px;padding:8px 0">marketing 暂无下钻数据</div>';
+  }
+
+  // ---------- 渲染：IP TOP ----------
+  function renderTopIps(ips){
+    const list = document.querySelectorAll('.grid2 .card')[1]?.querySelector('.iplist');
+    if (!list) return;
+    list.innerHTML = ips.length
+      ? ips.map(x => `
+          <div class="iprow">
+            <span class="ip">${esc(x.ip)}</span>
+            <span class="city">${esc(x.city || '—')}</span>
+            <span class="secs">${(x.sections||[]).map(s => `<span>${esc(s)}</span>`).join('')}</span>
+            <span class="pv">${fmt(x.pv)}</span>
+            <span class="dur">${fmtDur(x.dur_sec)}</span>
+          </div>`).join('')
+      : '<div style="color:var(--txt3);font-size:11.5px;padding:8px 0">尚无数据</div>';
+  }
+
+  // ---------- 渲染：明细表 ----------
+  function renderEvents(data){
+    const tbody = document.querySelector('.table tbody');
+    if (!tbody) return;
+    tbody.innerHTML = data.rows.length
+      ? data.rows.map(r => {
+          const sec = r.subsection || r.section;
+          const ua = `${esc(r.ua_browser||'?')} / ${esc(r.ua_os||'?')}`;
+          const uaCls = r.ua_device === 'mobile' ? 'ua-mob' : 'ua-pc';
+          return `<tr>
+            <td>${esc(r.ip)}</td>
+            <td class="city">${esc(r.ip_city || '—')}</td>
+            <td class="${uaCls}">${ua}</td>
+            <td><span class="stag ${sectionCls(sec)}">${esc(sec)}</span></td>
+            <td>${esc(r.page)}</td>
+            <td>${fmtTime(r.ts)}</td>
+            <td>${fmtDur(r.dur_sec)}</td>
+            <td class="city">${esc((r.referrer||'').slice(0,40) || '直接访问')}</td>
+          </tr>`;
+        }).join('')
+      : '<tr><td colspan="8" style="text-align:center;color:var(--txt3);padding:24px">尚无访问数据。访问几个页面后再回来看 :)</td></tr>';
+
+    // 分页
+    const total = data.total || 0;
+    const totalPages = Math.max(1, Math.ceil(total / data.size));
+    const pager = document.querySelector('.pager');
+    if (pager){
+      pager.querySelector('span').innerHTML =
+        `共 <b style="color:var(--txt2)">${fmt(total)}</b> 条 · 第 <b style="color:var(--txt2)">${data.page}</b> / ${totalPages} 页`;
+      const pages = pager.querySelector('.pages');
+      const html = [];
+      html.push(`<button ${data.page<=1?'disabled':''} data-pg="${data.page-1}">‹</button>`);
+      const showPages = [];
+      for(let i=1;i<=totalPages;i++){
+        if(i===1 || i===totalPages || Math.abs(i-data.page)<=2) showPages.push(i);
+        else if(showPages[showPages.length-1] !== '…') showPages.push('…');
+      }
+      showPages.forEach(p => {
+        if(p === '…') html.push('<button>…</button>');
+        else html.push(`<button class="${p===data.page?'on':''}" data-pg="${p}">${p}</button>`);
+      });
+      html.push(`<button ${data.page>=totalPages?'disabled':''} data-pg="${data.page+1}">›</button>`);
+      pages.innerHTML = html.join('');
+      pages.querySelectorAll('button[data-pg]').forEach(btn => {
+        btn.onclick = () => {
+          const pg = parseInt(btn.dataset.pg, 10);
+          if (!isNaN(pg) && pg >= 1 && pg <= totalPages){
+            STATE.page = pg;
+            loadEvents();
+          }
+        };
+      });
+    }
+  }
+
+  // ---------- 加载 ----------
+  async function loadOverview(){
+    try {
+      const data = await api(`/api/admin/stats/overview?rng=${STATE.rng}`);
+      renderKpis(data.kpis);
+      renderTimeline(data.timeline, data.bucket_sec);
+      renderSections(data.sections);
+      renderTopIps(data.top_ips);
+      // 移除 Mock 横幅（拿到真实数据后）
+      const banner = document.querySelector('.banner');
+      if (banner) banner.style.display = 'none';
+      $$('#lastUpdate').textContent = '刚刚';
+    } catch (e){
+      console.warn('admin overview 失败:', e);
+      const banner = document.querySelector('.banner');
+      if (banner){
+        banner.innerHTML = '⚠️ <b>API 加载失败</b>：' + esc(e.message) +
+          '（保留 Mock 数据展示骨架；BasicAuth 登录窗口未确认或后端未起）';
+      }
+    }
+  }
+  async function loadEvents(){
+    try {
+      const qs = new URLSearchParams({
+        rng: STATE.rng, page: STATE.page, size: STATE.size,
+        mask_ip: STATE.maskIP ? 'true' : 'false',
+      });
+      if (STATE.section) qs.append('section', STATE.section);
+      if (STATE.keyword) qs.append('keyword', STATE.keyword);
+      const data = await api('/api/admin/stats/events?' + qs.toString());
+      renderEvents(data);
+    } catch (e){ console.warn('admin events 失败:', e); }
+  }
+  async function loadAll(){ await loadOverview(); await loadEvents(); }
+
+  // ---------- 筛选联动 ----------
+  // 时间段
+  document.querySelectorAll('.toolbar .seg')[0]?.querySelectorAll('button').forEach((btn, i) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.toolbar .seg')[0].querySelectorAll('button').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      const map = ['1h','today','7d','30d','custom'];
+      const v = map[i] || 'today';
+      if (v === 'custom') { alert('自定义时间区间将在 PR-3 二期实现'); return; }
+      STATE.rng = v; STATE.page = 1; loadAll();
+    });
+  });
+  // 板块
+  document.querySelector('.toolbar select')?.addEventListener('change', e => {
+    const v = e.target.value;
+    // 把 "marketing.product（选品）" 这种 → "product"；只有 marketing.* 才下钻到 subsection
+    const m = v.match(/^(marketing|ocr|asr|raw|qc)\.?(\w+)?/);
+    STATE.section = m ? (m[2] || m[1]) : '';
+    STATE.page = 1;
+    loadEvents();
+  });
+  // 搜索（节流 500ms）
+  let _kwT;
+  document.querySelector('.toolbar input[type=text]')?.addEventListener('input', e => {
+    clearTimeout(_kwT);
+    _kwT = setTimeout(() => {
+      STATE.keyword = e.target.value.trim(); STATE.page = 1; loadEvents();
+    }, 500);
+  });
+  // IP 完整/脱敏
+  document.querySelectorAll('.toolbar .seg')[1]?.querySelectorAll('button').forEach((btn, i) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.toolbar .seg')[1].querySelectorAll('button').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      STATE.maskIP = (i === 1);
+      loadEvents();
+    });
+  });
+  // 导出
+  document.querySelectorAll('.btn').forEach(btn => {
+    if (/导出/.test(btn.textContent)){
+      btn.onclick = () => location.href = BASE + '/api/admin/stats/export?rng=' + STATE.rng;
+    }
+    if (/刷新/.test(btn.textContent)){
+      btn.onclick = () => { loadAll(); };
+    }
+  });
+
+  // 首屏加载
+  loadAll();
+  // 自动刷新（30s）
+  setInterval(loadAll, 30000);
+  // 最近更新时间显示
+  setInterval(() => { const el = $$('#lastUpdate'); if (el) el.textContent = '刚刚'; }, 5000);
+})();
+</script>
+  <script src="/static/track.js" defer></script>
+</body>
+</html>
